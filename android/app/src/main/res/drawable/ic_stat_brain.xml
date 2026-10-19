@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple brain silhouette for notifications (must be single-colour). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.5,3C6.6,3 5,4.4 4.8,6.2C3.7,6.7 3,7.8 3,9c0,0.7 0.2,1.3 0.6,1.8C3.2,11.4 3,12 3,12.7c0,1.3 0.8,2.5 2,3c0.1,1.9 1.7,3.3 3.6,3.3c0.9,0 1.7,-0.3 2.4,-0.9V3.9C10.4,3.3 9.5,3 8.5,3zM15.5,3c-1,0 -1.9,0.3 -2.5,0.9v14.2c0.7,0.6 1.5,0.9 2.4,0.9c1.9,0 3.5,-1.4 3.6,-3.3c1.2,-0.5 2,-1.7 2,-3c0,-0.7 -0.2,-1.3 -0.6,-1.9C20.8,10.3 21,9.7 21,9c0,-1.2 -0.7,-2.3 -1.8,-2.8C19,4.4 17.4,3 15.5,3z" />
+</vector>

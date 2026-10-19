@@ -1,0 +1,195 @@
+package com.brainbuddy.brain_buddy.core
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Calendar
+
+/**
+ * All counting data, stored only on the phone.
+ *
+ * events     – one row per reel: watched / skimmed / ad
+ * time_spent – milliseconds spent on reel screens per app per day
+ * unlocks    – each "5 more reels" after the limit
+ * intents    – answers to "Why are you here?"
+ */
+class Db private constructor(context: Context) :
+    SQLiteOpenHelper(context.applicationContext, "brain_buddy.db", null, 1) {
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, k TEXT NOT NULL, kind TEXT NOT NULL)")
+        db.execSQL("CREATE INDEX events_day ON events(day)")
+        db.execSQL("CREATE TABLE time_spent(day TEXT NOT NULL, pkg TEXT NOT NULL, ms INTEGER NOT NULL, PRIMARY KEY(day, pkg))")
+        db.execSQL("CREATE TABLE unlocks(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE intents(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, reason TEXT NOT NULL)")
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+
+    fun insertEvent(day: String, pkg: String, key: String, kind: String) {
+        writableDatabase.insert("events", null, ContentValues().apply {
+            put("day", day); put("ts", System.currentTimeMillis()); put("pkg", pkg); put("k", key); put("kind", kind)
+        })
+    }
+
+    /** A reel first skimmed and later watched properly becomes a watched reel. */
+    fun upgradeSkimmed(day: String, key: String): Boolean {
+        val cv = ContentValues().apply { put("kind", "watched") }
+        return writableDatabase.update("events", cv, "day = ? AND k = ? AND kind = 'skimmed'", arrayOf(day, key)) > 0
+    }
+
+    fun addTime(day: String, pkg: String, ms: Long) {
+        writableDatabase.execSQL(
+            "INSERT INTO time_spent(day, pkg, ms) VALUES(?, ?, ?) ON CONFLICT(day, pkg) DO UPDATE SET ms = ms + excluded.ms",
+            arrayOf<Any>(day, pkg, ms),
+        )
+    }
+
+    fun insertUnlock(day: String, kind: String) {
+        writableDatabase.insert("unlocks", null, ContentValues().apply {
+            put("day", day); put("ts", System.currentTimeMillis()); put("kind", kind)
+        })
+    }
+
+    fun insertIntent(day: String, pkg: String, reason: String) {
+        writableDatabase.insert("intents", null, ContentValues().apply {
+            put("day", day); put("ts", System.currentTimeMillis()); put("pkg", pkg); put("reason", reason)
+        })
+    }
+
+    fun watchedCount(day: String): Int =
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM events WHERE day = ? AND kind = 'watched'", arrayOf(day)).use {
+            if (it.moveToFirst()) it.getInt(0) else 0
+        }
+
+    /** Keys of reels already counted today, so the same reel never counts twice. */
+    fun countedKeys(day: String): Set<String> {
+        val out = HashSet<String>()
+        readableDatabase.rawQuery("SELECT k FROM events WHERE day = ?", arrayOf(day)).use {
+            while (it.moveToNext()) out.add(it.getString(0))
+        }
+        return out
+    }
+
+    fun daySummary(day: String): Map<String, Any> {
+        val apps = LinkedHashMap<String, MutableMap<String, Any>>()
+        fun app(pkg: String) = apps.getOrPut(pkg) {
+            mutableMapOf("pkg" to pkg, "name" to TargetApps.name(pkg), "watched" to 0, "skimmed" to 0, "ms" to 0L)
+        }
+        var watched = 0; var skimmed = 0; var ads = 0; var ms = 0L
+        val hours = IntArray(24)
+        val cal = Calendar.getInstance()
+        val r = readableDatabase
+        r.rawQuery("SELECT pkg, kind, ts FROM events WHERE day = ?", arrayOf(day)).use {
+            while (it.moveToNext()) {
+                val pkg = it.getString(0)
+                when (it.getString(1)) {
+                    "watched" -> {
+                        watched++
+                        app(pkg)["watched"] = (app(pkg)["watched"] as Int) + 1
+                        cal.timeInMillis = it.getLong(2)
+                        hours[cal.get(Calendar.HOUR_OF_DAY)]++
+                    }
+                    "skimmed" -> { skimmed++; app(pkg)["skimmed"] = (app(pkg)["skimmed"] as Int) + 1 }
+                    "ad" -> ads++
+                }
+            }
+        }
+        r.rawQuery("SELECT pkg, ms FROM time_spent WHERE day = ?", arrayOf(day)).use {
+            while (it.moveToNext()) {
+                val t = it.getLong(1)
+                ms += t
+                app(it.getString(0))["ms"] = t
+            }
+        }
+        val unlocks = r.rawQuery("SELECT COUNT(*) FROM unlocks WHERE day = ?", arrayOf(day)).use {
+            if (it.moveToFirst()) it.getInt(0) else 0
+        }
+        val intents = HashMap<String, Int>()
+        r.rawQuery("SELECT reason, COUNT(*) FROM intents WHERE day = ? GROUP BY reason", arrayOf(day)).use {
+            while (it.moveToNext()) intents[it.getString(0)] = it.getInt(1)
+        }
+        return mapOf(
+            "day" to day, "watched" to watched, "skimmed" to skimmed, "ads" to ads, "ms" to ms,
+            "unlocks" to unlocks, "apps" to apps.values.toList(), "hours" to hours.toList(), "intents" to intents,
+        )
+    }
+
+    fun exportJson(config: Map<String, Any>): String {
+        val root = JSONObject()
+        root.put("format", "brain_buddy_backup")
+        root.put("version", 1)
+        root.put("createdAt", System.currentTimeMillis())
+        root.put("config", JSONObject(config))
+        for (table in TABLES) {
+            val rows = JSONArray()
+            readableDatabase.rawQuery("SELECT * FROM $table", null).use { c ->
+                while (c.moveToNext()) {
+                    val row = JSONObject()
+                    for (i in 0 until c.columnCount) {
+                        if (c.getColumnName(i) == "id") continue
+                        when (c.getType(i)) {
+                            android.database.Cursor.FIELD_TYPE_INTEGER -> row.put(c.getColumnName(i), c.getLong(i))
+                            else -> row.put(c.getColumnName(i), c.getString(i))
+                        }
+                    }
+                    rows.put(row)
+                }
+            }
+            root.put(table, rows)
+        }
+        return root.toString()
+    }
+
+    /** Replaces all data with a backup. Returns the backup's config so it can be restored too. */
+    fun importJson(json: String): Map<String, Any?> {
+        val root = JSONObject(json)
+        require(root.optString("format") == "brain_buddy_backup") { "Not a Brain Buddy backup file" }
+        val w = writableDatabase
+        w.beginTransaction()
+        try {
+            for (table in TABLES) {
+                w.delete(table, null, null)
+                val rows = root.optJSONArray(table) ?: continue
+                for (i in 0 until rows.length()) {
+                    val row = rows.getJSONObject(i)
+                    val cv = ContentValues()
+                    for (key in row.keys()) {
+                        when (val v = row.get(key)) {
+                            is Number -> cv.put(key, v.toLong())
+                            else -> cv.put(key, v.toString())
+                        }
+                    }
+                    w.insert(table, null, cv)
+                }
+            }
+            w.setTransactionSuccessful()
+        } finally {
+            w.endTransaction()
+        }
+        val cfg = root.optJSONObject("config") ?: return emptyMap()
+        val out = HashMap<String, Any?>()
+        for (key in cfg.keys()) {
+            val v = cfg.get(key)
+            out[key] = if (v is JSONArray) (0 until v.length()).map { v.getString(it) } else v
+        }
+        return out
+    }
+
+    fun clearAll() {
+        val w = writableDatabase
+        for (table in TABLES) w.delete(table, null, null)
+    }
+
+    companion object {
+        private val TABLES = listOf("events", "time_spent", "unlocks", "intents")
+
+        @Volatile private var instance: Db? = null
+        fun get(context: Context): Db = instance ?: synchronized(this) {
+            instance ?: Db(context).also { instance = it }
+        }
+    }
+}
