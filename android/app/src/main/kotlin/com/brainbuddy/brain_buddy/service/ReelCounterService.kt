@@ -52,6 +52,7 @@ class ReelCounterService : AccessibilityService() {
     private val chrome = HashMap<String, HashMap<String, Int>>()
     /** Apps that show readable reel text. For these we never fall back to "one reel per swipe". */
     private val appsWithText = HashSet<String>()
+    private var emptySince = 0L
     private val debug by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var fallbackCounter = 0
     private var evalScheduled = false
@@ -102,12 +103,23 @@ class ReelCounterService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         if (TargetApps.find(pkg) == null) return
         lastEventAt = System.currentTimeMillis()
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && isReelSwipe(event)) {
             pendingScroll = true
             lastScrollAt = lastEventAt
         }
         // Reels screens send many events per second (video progress); look at the screen at most every 250 ms.
         scheduleEvaluate(250)
+    }
+
+    /**
+     * Only a big view scrolling is a reel swipe. Small views scroll all the time on reels
+     * (Instagram's sliding song title), and treating those as swipes delayed counting.
+     */
+    private fun isReelSwipe(event: AccessibilityEvent): Boolean {
+        val source = event.source ?: return false
+        val r = Rect()
+        source.getBoundsInScreen(r)
+        return r.height() >= resources.displayMetrics.heightPixels * 0.4
     }
 
     private fun scheduleEvaluate(delayMs: Long) {
@@ -146,6 +158,7 @@ class ReelCounterService : AccessibilityService() {
         if (screen.isEmpty) resources.displayMetrics.let { screen.set(0, 0, it.widthPixels, it.heightPixels) }
 
         if (!ReelDetector.isReelsScreen(root, app, screen)) {
+            if (reelsPkg != null) log("not a reels screen any more")
             if (reelsPkg != null) leaveReels()
             pendingScroll = false
             return
@@ -160,19 +173,26 @@ class ReelCounterService : AccessibilityService() {
             return
         }
 
-        val snap = ReelDetector.snapshot(root, screen)
+        val snap = ReelDetector.snapshot(root, app, screen)
         val texts = withoutChrome(app.pkg, snap.texts).take(8)
+        if (texts.isNotEmpty()) emptySince = 0L
         if (texts.isNotEmpty()) {
             val cur = curTexts
             if (cur != null) {
                 val overlap = ReelDetector.overlap(cur, texts)
-                // Same reel if most texts match, or if nothing was swiped (captions expanding,
-                // "Use this sound" popping up…). Without a swipe, only a long-running reel can
-                // auto-advance to a completely different one.
-                val sameReel = overlap >= 0.5 ||
-                    (!pendingScroll && (overlap > 0 || now - curStart < AUTO_ADVANCE_MS))
+                // Same reel if most texts match, or if some still match and nothing was swiped
+                // (a caption expanding, "Use this sound" popping up…). Completely different texts
+                // are always a new reel, even without a swipe event (YouTube doesn't always send one).
+                val sameReel = overlap >= 0.5 || (!pendingScroll && overlap > 0)
                 if (sameReel) {
                     if (snap.isAd) curIsAd = true
+                    if (pendingScroll && now - lastScrollAt < SWIPE_RECHECK_MS) {
+                        // Swiped, but the app still shows the old reel's texts (YouTube swaps them in late
+                        // and sends no event when it does). Keep looking until the new reel shows up.
+                        scheduleEvaluate(250)
+                        return
+                    }
+                    if (pendingScroll) log("swipe but same reel (overlap=$overlap) now=${texts.take(3)}")
                     pendingScroll = false
                     return
                 }
@@ -180,8 +200,9 @@ class ReelCounterService : AccessibilityService() {
             appsWithText.add(app.pkg)
             learnChrome(app.pkg, snap.texts)
             startReel(ReelDetector.key(texts), texts, snap.isAd)
-        } else if (app.pkg in appsWithText) {
-            // The next reel is still loading its caption. Look again shortly instead of guessing.
+        } else if (waitingForText(now) && (app.showsText || app.pkg in appsWithText || curKey == null)) {
+            // The reel is still loading its caption. Look again shortly instead of guessing.
+            if (pendingScroll && now - emptySince < 300) log("waiting for texts, raw=${snap.texts.take(4)}")
             scheduleEvaluate(300)
             return
         } else if (curKey == null || (pendingScroll && now - lastFallbackPage > 800)) {
@@ -191,6 +212,16 @@ class ReelCounterService : AccessibilityService() {
             startReel("swipe-$now-$fallbackCounter", null, snap.isAd)
         }
         pendingScroll = false
+    }
+
+    /**
+     * Gives a reel time to show its caption before falling back to "one reel per swipe":
+     * a short wait after a swipe (the user is clearly on a new reel), longer when entering an app.
+     */
+    private fun waitingForText(now: Long): Boolean {
+        if (emptySince == 0L) emptySince = now
+        val limit = if (pendingScroll) SWIPE_TEXT_WAIT_MS else TEXT_WAIT_MS
+        return now - emptySince < limit
     }
 
     private fun withoutChrome(pkg: String, texts: List<String>): List<String> {
@@ -207,13 +238,17 @@ class ReelCounterService : AccessibilityService() {
     private fun startReel(key: String, texts: List<String>?, isAd: Boolean) {
         log("new reel $key ad=$isAd swipe=$pendingScroll texts=${texts?.take(3)}")
         finishReel()
+        val now = System.currentTimeMillis()
+        // The reel appeared when the swipe ended, not when its caption finished loading
+        // (YouTube fades its texts in ~1.5 s later). The watch time runs from the swipe.
+        val shownSince = if (pendingScroll && now - lastScrollAt < MAX_TEXT_DELAY_MS) lastScrollAt else now
         curKey = key
         curTexts = texts
-        curStart = System.currentTimeMillis()
+        curStart = shownSince
         curDone = false
         curIsAd = isAd
         main.removeCallbacks(watchCheck)
-        main.postDelayed(watchCheck, config.dwellSec * 1000L)
+        main.postDelayed(watchCheck, (config.dwellSec * 1000L - (now - shownSince)).coerceAtLeast(0))
     }
 
     /** Called when the user moves on from a reel: if it never reached the watch time, it was skimmed. */
@@ -362,9 +397,13 @@ class ReelCounterService : AccessibilityService() {
     companion object {
         private const val INTENT_COOLDOWN_MS = 10 * 60 * 1000L
         /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
-        private const val SETTLE_MS = 450L
-        /** A reel must play this long before a completely different reel without a swipe counts as auto-advance. */
-        private const val AUTO_ADVANCE_MS = 5000L
+        private const val SETTLE_MS = 400L
+        private const val TEXT_WAIT_MS = 3000L
+        private const val SWIPE_TEXT_WAIT_MS = 1500L
+        /** After a swipe, how long to keep looking for the new reel before deciding the swipe bounced back. */
+        private const val SWIPE_RECHECK_MS = 2500L
+        /** Longest gap between a swipe and its reel's caption appearing that still counts from the swipe. */
+        private const val MAX_TEXT_DELAY_MS = 4000L
         /** A text seen on this many different reels is treated as a button/label, not reel content. */
         private const val CHROME_MIN_REELS = 3
 

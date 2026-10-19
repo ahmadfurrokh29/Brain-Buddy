@@ -18,7 +18,8 @@ object ReelDetector {
     /** [texts] are the reel's own texts, longest first. */
     data class Snapshot(val texts: List<String>, val isAd: Boolean)
 
-    private const val MAX_NODES = 500
+    /** YouTube nests reel texts ~25 levels deep, so the walk must be generous. */
+    private const val MAX_NODES = 1500
 
     /** Buttons and labels that appear on every reel and say nothing about which reel it is. */
     private val UI_WORDS = setOf(
@@ -29,12 +30,14 @@ object ReelDetector {
         "see translation", "add comment…", "add a comment…", "suggested for you", "subscriptions", "you",
         "library", "more options", "navigate up", "go back", "action menu", "sound", "add", "notifications",
         "play video", "pause video", "captions", "settings", "report", "not interested", "use this sound",
+        "more actions", "new content available", "youtube premium", "privacy setting public",
     )
 
     /** Button descriptions that start the same on every reel ("Like this video along with …"). */
     private val UI_PREFIXES = listOf(
         "like this", "dislike this", "share this", "remix this", "view comments", "subscribe to", "comments.",
         "see more videos using this sound", "go to channel", "double tap", "tap to", "swipe",
+        "subscriptions", "navigate to your reels profile", "enter full-screen", "are you interested in this",
     )
 
     private val AD_LABELS = setOf("sponsored", "ad", "promoted", "sponsored ·", "ad ·")
@@ -55,8 +58,8 @@ object ReelDetector {
      * Texts of the reel that fills the screen. Neighbouring reels that peek in during a swipe,
      * and app chrome outside the current page, are left out.
      */
-    fun snapshot(root: AccessibilityNodeInfo, screen: Rect): Snapshot {
-        val scope = currentPage(root, screen) ?: root
+    fun snapshot(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): Snapshot {
+        val scope = pageById(root, app, screen) ?: currentPage(root, screen) ?: root
         val texts = LinkedHashSet<String>()
         var isAd = false
         val r = Rect()
@@ -71,6 +74,8 @@ object ReelDetector {
                 if (s.length < 3 || s.length > 300) continue
                 if (lower in UI_WORDS || UI_PREFIXES.any { lower.startsWith(it) }) continue
                 if (s.any { it.isDigit() }) continue // like counts, view counts and timers change while watching
+                // Hashtags like "#shorts" or "#viral" are shared by many different reels.
+                if (s.startsWith("#") && s.none { it == ' ' }) continue
                 texts.add(s)
             }
         }
@@ -87,6 +92,24 @@ object ReelDetector {
         val setB = b.toHashSet()
         val shared = a.count { it in setB }
         return shared.toDouble() / minOf(a.size, setB.size)
+    }
+
+    /** The app's own reel page (found by view id) covering most of the screen. */
+    private fun pageById(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): AccessibilityNodeInfo? {
+        if (app.pageIds.isEmpty()) return null
+        val r = Rect()
+        val screenArea = screen.width().toLong() * screen.height()
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = 0L
+        for (id in app.pageIds) {
+            for (node in root.findAccessibilityNodeInfosByViewId("${app.pkg}:id/$id")) {
+                node.getBoundsInScreen(r)
+                if (!r.intersect(screen)) continue
+                val area = r.width().toLong() * r.height()
+                if (area > bestArea) { bestArea = area; best = node }
+            }
+        }
+        return if (bestArea * 2 >= screenArea) best else null
     }
 
     /** The pager page covering most of the screen, or null if the screen has no full-screen pager. */
