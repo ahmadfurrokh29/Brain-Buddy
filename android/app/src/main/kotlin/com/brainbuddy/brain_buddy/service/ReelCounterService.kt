@@ -1,6 +1,7 @@
 package com.brainbuddy.brain_buddy.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.pm.ApplicationInfo
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
@@ -34,13 +35,24 @@ class ReelCounterService : AccessibilityService() {
     private var reelsPkg: String? = null
 
     private var curKey: String? = null
-    private var curTexts: Set<String>? = null
+    private var curTexts: List<String>? = null
     private var curStart = 0L
     private var curDone = false
     private var curIsAd = false
 
+    /** A swipe happened since the current reel started. Reels only change with a swipe (or auto-advance). */
     private var pendingScroll = false
+    private var lastScrollAt = 0L
     private var lastFallbackPage = 0L
+
+    /**
+     * Per app: on how many different reels each text appeared. Texts seen on 3+ reels are buttons
+     * and labels ("Dislike this video", the app's tabs…), not reel content, so they are ignored.
+     */
+    private val chrome = HashMap<String, HashMap<String, Int>>()
+    /** Apps that show readable reel text. For these we never fall back to "one reel per swipe". */
+    private val appsWithText = HashSet<String>()
+    private val debug by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var fallbackCounter = 0
     private var evalScheduled = false
 
@@ -90,12 +102,22 @@ class ReelCounterService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         if (TargetApps.find(pkg) == null) return
         lastEventAt = System.currentTimeMillis()
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) pendingScroll = true
-        // Reels screens send many events per second (video progress); look at the screen at most every 250 ms.
-        if (!evalScheduled) {
-            evalScheduled = true
-            main.postDelayed(evaluateRunnable, 250)
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            pendingScroll = true
+            lastScrollAt = lastEventAt
         }
+        // Reels screens send many events per second (video progress); look at the screen at most every 250 ms.
+        scheduleEvaluate(250)
+    }
+
+    private fun scheduleEvaluate(delayMs: Long) {
+        if (evalScheduled) return
+        evalScheduled = true
+        main.postDelayed(evaluateRunnable, delayMs)
+    }
+
+    private fun log(msg: String) {
+        if (debug) Log.d(TAG, msg)
     }
 
     override fun onInterrupt() {}
@@ -130,15 +152,38 @@ class ReelCounterService : AccessibilityService() {
         }
         if (reelsPkg != app.pkg) enterReels(app.pkg)
 
-        val snap = ReelDetector.snapshot(root, screen)
+        // Mid-swipe the screen shows two half reels. Wait until the swipe has settled.
         val now = System.currentTimeMillis()
-        if (snap.texts.isNotEmpty()) {
-            val same = curTexts?.let { ReelDetector.similar(it, snap.texts) } ?: false
-            if (same) {
-                if (snap.isAd) curIsAd = true
-            } else {
-                startReel(ReelDetector.key(snap.texts), snap.texts, snap.isAd)
+        val sinceScroll = now - lastScrollAt
+        if (sinceScroll < SETTLE_MS) {
+            scheduleEvaluate(SETTLE_MS - sinceScroll + 20)
+            return
+        }
+
+        val snap = ReelDetector.snapshot(root, screen)
+        val texts = withoutChrome(app.pkg, snap.texts).take(8)
+        if (texts.isNotEmpty()) {
+            val cur = curTexts
+            if (cur != null) {
+                val overlap = ReelDetector.overlap(cur, texts)
+                // Same reel if most texts match, or if nothing was swiped (captions expanding,
+                // "Use this sound" popping up…). Without a swipe, only a long-running reel can
+                // auto-advance to a completely different one.
+                val sameReel = overlap >= 0.5 ||
+                    (!pendingScroll && (overlap > 0 || now - curStart < AUTO_ADVANCE_MS))
+                if (sameReel) {
+                    if (snap.isAd) curIsAd = true
+                    pendingScroll = false
+                    return
+                }
             }
+            appsWithText.add(app.pkg)
+            learnChrome(app.pkg, snap.texts)
+            startReel(ReelDetector.key(texts), texts, snap.isAd)
+        } else if (app.pkg in appsWithText) {
+            // The next reel is still loading its caption. Look again shortly instead of guessing.
+            scheduleEvaluate(300)
+            return
         } else if (curKey == null || (pendingScroll && now - lastFallbackPage > 800)) {
             // The app shows no readable text: fall back to one reel per swipe.
             lastFallbackPage = now
@@ -148,7 +193,19 @@ class ReelCounterService : AccessibilityService() {
         pendingScroll = false
     }
 
-    private fun startReel(key: String, texts: Set<String>?, isAd: Boolean) {
+    private fun withoutChrome(pkg: String, texts: List<String>): List<String> {
+        val seen = chrome[pkg] ?: return texts
+        return texts.filter { (seen[it] ?: 0) < CHROME_MIN_REELS }
+    }
+
+    private fun learnChrome(pkg: String, texts: List<String>) {
+        val seen = chrome.getOrPut(pkg) { HashMap() }
+        if (seen.size > 3000) seen.clear()
+        for (t in texts) seen[t] = (seen[t] ?: 0) + 1
+    }
+
+    private fun startReel(key: String, texts: List<String>?, isAd: Boolean) {
+        log("new reel $key ad=$isAd swipe=$pendingScroll texts=${texts?.take(3)}")
         finishReel()
         curKey = key
         curTexts = texts
@@ -165,6 +222,7 @@ class ReelCounterService : AccessibilityService() {
         val pkg = reelsPkg ?: return
         val shown = System.currentTimeMillis() - curStart
         if (!curDone && !curIsAd && shown > 300 && key !in counted) {
+            log("skimmed $key after ${shown}ms")
             counted.add(key)
             db.insertEvent(day, pkg, key, "skimmed")
             CountBus.emit()
@@ -179,14 +237,16 @@ class ReelCounterService : AccessibilityService() {
         if (curDone) return
         curDone = true
         if (curIsAd) {
-            if (config.ignoreAds) { db.insertEvent(day, pkg, key, "ad"); return }
+            if (config.ignoreAds) { log("ad ignored $key"); db.insertEvent(day, pkg, key, "ad"); return }
         }
         if (key in counted) {
             // Skimmed earlier and now watched properly: upgrade instead of counting twice.
-            if (!db.upgradeSkimmed(day, key)) return
+            if (!db.upgradeSkimmed(day, key)) { log("already counted $key"); return }
+            log("upgraded skim to watched $key")
         } else {
             counted.add(key)
             db.insertEvent(day, pkg, key, "watched")
+            log("WATCHED $key")
         }
         afterCount()
     }
@@ -204,8 +264,11 @@ class ReelCounterService : AccessibilityService() {
     // ---------------------------------------------------------------- entering / leaving reels
 
     private fun enterReels(pkg: String) {
+        log("enter reels $pkg")
         finishReel()
         reelsPkg = pkg
+        curTexts = null
+        pendingScroll = false
         val watched = db.watchedCount(day)
         val allowance = config.allowanceToday()
         if (config.floatingCounter) overlays.showCounter(watched, allowance)
@@ -224,6 +287,7 @@ class ReelCounterService : AccessibilityService() {
     }
 
     private fun leaveReels() {
+        log("leave reels $reelsPkg")
         finishReel()
         main.removeCallbacks(watchCheck)
         flushTime()
@@ -297,6 +361,12 @@ class ReelCounterService : AccessibilityService() {
 
     companion object {
         private const val INTENT_COOLDOWN_MS = 10 * 60 * 1000L
+        /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
+        private const val SETTLE_MS = 450L
+        /** A reel must play this long before a completely different reel without a swipe counts as auto-advance. */
+        private const val AUTO_ADVANCE_MS = 5000L
+        /** A text seen on this many different reels is treated as a button/label, not reel content. */
+        private const val CHROME_MIN_REELS = 3
 
         @Volatile var instance: ReelCounterService? = null
             private set

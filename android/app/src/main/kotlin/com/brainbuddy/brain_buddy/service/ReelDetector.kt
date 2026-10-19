@@ -15,9 +15,10 @@ import com.brainbuddy.brain_buddy.core.TargetApp
  */
 object ReelDetector {
 
-    data class Snapshot(val texts: Set<String>, val isAd: Boolean)
+    /** [texts] are the reel's own texts, longest first. */
+    data class Snapshot(val texts: List<String>, val isAd: Boolean)
 
-    private const val MAX_NODES = 400
+    private const val MAX_NODES = 500
 
     /** Buttons and labels that appear on every reel and say nothing about which reel it is. */
     private val UI_WORDS = setOf(
@@ -25,7 +26,15 @@ object ReelDetector {
         "remix", "subscribe", "subscribed", "more", "reels", "shorts", "spotlight", "audio", "original audio",
         "home", "search", "profile", "inbox", "friends", "for you", "explore", "create", "camera", "back",
         "mute", "unmute", "play", "pause", "dislike", "options", "menu", "close", "watch", "video", "see more",
-        "see translation", "add comment…", "add a comment…", "suggested for you",
+        "see translation", "add comment…", "add a comment…", "suggested for you", "subscriptions", "you",
+        "library", "more options", "navigate up", "go back", "action menu", "sound", "add", "notifications",
+        "play video", "pause video", "captions", "settings", "report", "not interested", "use this sound",
+    )
+
+    /** Button descriptions that start the same on every reel ("Like this video along with …"). */
+    private val UI_PREFIXES = listOf(
+        "like this", "dislike this", "share this", "remix this", "view comments", "subscribe to", "comments.",
+        "see more videos using this sound", "go to channel", "double tap", "tap to", "swipe",
     )
 
     private val AD_LABELS = setOf("sponsored", "ad", "promoted", "sponsored ·", "ad ·")
@@ -39,52 +48,82 @@ object ReelDetector {
         if (app.wholeFeedIsReels) return true
         if (app.headerHints.isNotEmpty()) return hasHeader(root, app.headerHints, screen)
         // Apps without hints count only a true full-screen pager, never a normal feed list.
-        return pager.contains("ViewPager")
+        return pager.className?.toString()?.contains("ViewPager") == true
     }
 
+    /**
+     * Texts of the reel that fills the screen. Neighbouring reels that peek in during a swipe,
+     * and app chrome outside the current page, are left out.
+     */
     fun snapshot(root: AccessibilityNodeInfo, screen: Rect): Snapshot {
-        val texts = HashSet<String>()
+        val scope = currentPage(root, screen) ?: root
+        val texts = LinkedHashSet<String>()
         var isAd = false
         val r = Rect()
-        walk(root) { node ->
+        walk(scope) { node ->
             if (!node.isVisibleToUser) return@walk
             node.getBoundsInScreen(r)
-            if (!Rect.intersects(r, screen)) return@walk
+            if (!mostlyOnScreen(r, screen)) return@walk
             for (raw in listOfNotNull(node.text?.toString(), node.contentDescription?.toString())) {
                 val s = raw.trim()
                 val lower = s.lowercase()
                 if (lower in AD_LABELS || lower.startsWith("sponsored")) isAd = true
                 if (s.length < 3 || s.length > 300) continue
-                if (lower in UI_WORDS) continue
+                if (lower in UI_WORDS || UI_PREFIXES.any { lower.startsWith(it) }) continue
                 if (s.any { it.isDigit() }) continue // like counts, view counts and timers change while watching
                 texts.add(s)
             }
         }
-        // The longest texts are the caption, the author and the audio name.
-        val top = texts.sortedByDescending { it.length }.take(8).toSet()
-        return Snapshot(top, isAd)
+        return Snapshot(texts.sortedByDescending { it.length }, isAd)
     }
 
     /** Stable id for a reel, used to remember it for the rest of the day. */
-    fun key(texts: Set<String>): String =
+    fun key(texts: Collection<String>): String =
         texts.sortedByDescending { it.length }.take(4).sorted().joinToString("|").hashCode().toString(16)
 
-    /** Same reel if at least half of its texts are still on screen (captions can expand, buttons can change). */
-    fun similar(a: Set<String>, b: Set<String>): Boolean {
-        if (a.isEmpty() || b.isEmpty()) return false
-        val shared = a.count { it in b }
-        return shared * 2 >= minOf(a.size, b.size)
+    /** How much two reels' texts overlap, from 0 (nothing shared) to 1 (identical). */
+    fun overlap(a: Collection<String>, b: Collection<String>): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        val setB = b.toHashSet()
+        val shared = a.count { it in setB }
+        return shared.toDouble() / minOf(a.size, setB.size)
     }
 
-    private fun findFullScreenScroller(root: AccessibilityNodeInfo, screen: Rect): String? {
+    /** The pager page covering most of the screen, or null if the screen has no full-screen pager. */
+    private fun currentPage(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        val pager = findFullScreenScroller(root, screen) ?: return null
         val r = Rect()
-        var result: String? = null
+        val screenArea = screen.width().toLong() * screen.height()
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = 0L
+        for (i in 0 until pager.childCount) {
+            val child = pager.getChild(i) ?: continue
+            child.getBoundsInScreen(r)
+            if (!r.intersect(screen)) continue
+            val area = r.width().toLong() * r.height()
+            if (area > bestArea) { bestArea = area; best = child }
+        }
+        return if (bestArea * 2 >= screenArea) best else null
+    }
+
+    /** At least 60% of the node is on screen (mid-swipe neighbours are mostly off screen). */
+    private fun mostlyOnScreen(r: Rect, screen: Rect): Boolean {
+        val area = r.width().toLong() * r.height()
+        if (area <= 0) return false
+        val visible = Rect(r)
+        if (!visible.intersect(screen)) return false
+        return visible.width().toLong() * visible.height() * 10 >= area * 6
+    }
+
+    private fun findFullScreenScroller(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        val r = Rect()
+        var result: AccessibilityNodeInfo? = null
         walk(root) { node ->
             if (result != null || !node.isScrollable || !node.isVisibleToUser) return@walk
             val cls = node.className?.toString() ?: return@walk
             if (!cls.contains("ViewPager") && !cls.contains("RecyclerView")) return@walk
             node.getBoundsInScreen(r)
-            if (r.height() >= screen.height() * 0.8 && r.width() >= screen.width() * 0.9) result = cls
+            if (r.height() >= screen.height() * 0.8 && r.width() >= screen.width() * 0.9) result = node
         }
         return result
     }
