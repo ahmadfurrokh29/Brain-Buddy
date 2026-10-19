@@ -1,17 +1,40 @@
-# brain_buddy
+# Brain Buddy 🧠
 
-Brain Buddy - count reels, scroll less
+Count the reels you scroll. Scroll less. Live more.
 
-## Getting Started
+Brain Buddy counts every reel and short you watch on Instagram, YouTube Shorts, TikTok, Facebook, Snapchat and Reddit, shows the number live, and helps you stop with a friendly brain mascot that gets tired as you scroll.
 
-This project is a starting point for a Flutter application.
+## Features (Phase 1)
 
-A few resources to get you started if this is your first Flutter project:
+- **Honest counting:** a reel counts only after you watch it for 3 seconds (adjustable). Quick flicks are shown separately as *skimmed*. Ads and reels you see again are not counted.
+- **Brain Buddy mascot** with 5 moods: Fresh, Okay, Tired, Fried, Melted.
+- **Daily reel budget** with a **Gentle lock**: a breathing break when you reach your limit.
+- **"Why are you here?" pause** before reels open.
+- **Floating counter** on top of the reel apps.
+- **Budget warnings** at 50%, 80% and 100%.
+- **Insights:** reels by hour, per day, per app, and time spent.
+- **Home-screen widget.**
+- **Reliability Doctor:** checks the counter is running and gives fix steps for your phone brand.
+- **Private:** no login and no uploads. Data is protected by Android Auto Backup and by backup/restore files.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## How it works
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Part | Where |
+|---|---|
+| Screens (Flutter) | `lib/` |
+| Reel counting engine (Kotlin `AccessibilityService`) | `android/app/src/main/kotlin/.../service/` |
+| Reel screen detection, tuned per app | `service/ReelDetector.kt`, `core/TargetApps.kt` |
+| Local database | `core/Db.kt` (SQLite) |
+| Flutter ↔ Kotlin bridge | `NativeBridge.kt` and `lib/core/native_bridge.dart` |
+| Home-screen widget | `widget/BrainWidgetProvider.kt` |
+
+## Run
+
+```bash
+flutter pub get
+flutter run
+```
+
+Then, on the phone, open **Settings → Accessibility → Brain Buddy reel counter** and switch it on. The app walks you through this.
+
+Requires Android 8.0+.
