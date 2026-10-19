@@ -79,10 +79,12 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
             icon: Icons.battery_charging_full_rounded,
             title: 'Battery',
             tag: 'Recommended',
-            body: 'Some phones stop apps in the background. Choose "Don\'t optimise" / "Unrestricted" for Brain Buddy so the counter keeps working.',
-            done: status?.battery ?? false,
-            actionLabel: 'Open settings',
-            onAction: bridge.openBatterySettings,
+            body: (status?.battery ?? false) && (status?.backgroundRestricted ?? false)
+                ? 'Brain Buddy is restricted in the background. In App info → Battery, turn ON "Allow background activity".'
+                : 'Some phones stop apps in the background. Tap Allow on the next pop-up so the counter keeps working.',
+            done: status?.batteryOk ?? false,
+            actionLabel: (status?.battery ?? false) ? 'Open app info' : 'Allow',
+            onAction: (status?.battery ?? false) ? bridge.openAppSettings : bridge.openBatterySettings,
           ),
           _PermissionCard(
             icon: Icons.notifications_active_rounded,

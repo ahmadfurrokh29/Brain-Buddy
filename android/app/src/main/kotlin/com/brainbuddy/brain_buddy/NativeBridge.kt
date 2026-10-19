@@ -1,7 +1,9 @@
 package com.brainbuddy.brain_buddy
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
@@ -91,7 +93,7 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             true
         }
         "openAccessibilitySettings" -> open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        "openBatterySettings" -> open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        "openBatterySettings" -> requestBatteryExemption()
         "openAppSettings" -> openAppSettings()
         "openNotificationSettings" -> open(
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName),
@@ -118,6 +120,8 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             "accessibility" to isAccessibilityEnabled(),
             "serviceRunning" to (ReelCounterService.instance != null),
             "battery" to pm.isIgnoringBatteryOptimizations(activity.packageName),
+            "backgroundRestricted" to isBackgroundRestricted(),
+            "lastError" to (ReelCounterService.lastError ?: ""),
             "notifications" to NotificationManagerCompat.from(activity).areNotificationsEnabled(),
             "lastEventAt" to ReelCounterService.lastEventAt,
             "manufacturer" to Build.MANUFACTURER.lowercase(),
@@ -135,6 +139,23 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             it.equals(cn.flattenToString(), true) || it.equals(cn.flattenToShortString(), true)
         }
     }
+
+    /**
+     * Shows Android's own "Allow Brain Buddy to always run in the background?" dialog.
+     * The settings list we used before hides apps that are still optimised, so users couldn't find Brain Buddy.
+     */
+    @SuppressLint("BatteryLife")
+    private fun requestBatteryExemption(): Boolean {
+        val pm = activity.getSystemService(PowerManager::class.java)
+        if (pm.isIgnoringBatteryOptimizations(activity.packageName)) return openAppSettings()
+        return open(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${activity.packageName}")),
+        )
+    }
+
+    /** "Restrict background activity" (Samsung: "Put app to sleep") stops the counter even if battery optimisation is off. */
+    private fun isBackgroundRestricted(): Boolean =
+        Build.VERSION.SDK_INT >= 28 && activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted
 
     private fun isInstalled(pkg: String): Boolean = try {
         activity.packageManager.getPackageInfo(pkg, 0); true

@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.brainbuddy.brain_buddy.core.Config
 import com.brainbuddy.brain_buddy.core.CountBus
@@ -48,10 +49,26 @@ class ReelCounterService : AccessibilityService() {
     private var unsavedMs = 0L
     private val screen = Rect()
 
-    private val evaluateRunnable = Runnable { evalScheduled = false; evaluate() }
-    private val watchCheck = Runnable { onWatchTimer() }
+    private val evaluateRunnable = Runnable { evalScheduled = false; safe("evaluate") { evaluate() } }
+    private val watchCheck = Runnable { safe("watchTimer") { onWatchTimer() } }
     private val tick = object : Runnable {
-        override fun run() { onTick(); main.postDelayed(this, 1000) }
+        override fun run() {
+            safe("tick") { onTick() }
+            main.postDelayed(this, 1000)
+        }
+    }
+
+    /**
+     * An uncaught error inside an accessibility service kills it, while Android still shows it as "on".
+     * Every entry point goes through here so one bad screen or database hiccup can't stop counting.
+     */
+    private inline fun safe(where: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Error in $where", t)
+            lastError = "$where: ${t.javaClass.simpleName}: ${t.message}"
+        }
     }
 
     override fun onServiceConnected() {
@@ -67,7 +84,9 @@ class ReelCounterService : AccessibilityService() {
         CountBus.emit()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+    override fun onAccessibilityEvent(event: AccessibilityEvent) = safe("event") { onEvent(event) }
+
+    private fun onEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
         if (TargetApps.find(pkg) == null) return
         lastEventAt = System.currentTimeMillis()
@@ -197,8 +216,8 @@ class ReelCounterService : AccessibilityService() {
                 config.lastIntentAt = now
                 overlays.showIntent(
                     config.intentWaitSec,
-                    onReason = { reason -> db.insertIntent(day, pkg, reason); CountBus.emit() },
-                    onClose = { db.insertIntent(day, pkg, "Closed"); goHome() },
+                    onReason = { reason -> safe("intentReason") { db.insertIntent(day, pkg, reason); CountBus.emit() } },
+                    onClose = { safe("intentClose") { db.insertIntent(day, pkg, "Closed"); goHome() } },
                 )
             }
         }
@@ -217,14 +236,16 @@ class ReelCounterService : AccessibilityService() {
         overlays.hideIntent()
         overlays.showLock(
             watched, allowance,
-            onClose = { goHome() },
-            onMore = {
-                config.addExtraToday(5)
-                db.insertUnlock(day, "gentle_plus5")
-                if (config.floatingCounter) overlays.updateCounter(db.watchedCount(day), config.allowanceToday())
-                CountBus.emit()
-            },
+            onClose = { safe("lockClose") { goHome() } },
+            onMore = { safe("lockMore") { addFiveMore() } },
         )
+    }
+
+    private fun addFiveMore() {
+        config.addExtraToday(5)
+        db.insertUnlock(day, "gentle_plus5")
+        if (config.floatingCounter) overlays.updateCounter(db.watchedCount(day), config.allowanceToday())
+        CountBus.emit()
     }
 
     private fun goHome() {
@@ -281,5 +302,9 @@ class ReelCounterService : AccessibilityService() {
             private set
         @Volatile var lastEventAt = 0L
             private set
+        /** Last error caught by [safe], shown in the Reliability Doctor to help fix counting bugs. */
+        @Volatile var lastError: String? = null
+            private set
+        private const val TAG = "BrainBuddy"
     }
 }

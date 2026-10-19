@@ -2,6 +2,9 @@
 
     <!-- Budget warnings (Android 13+ asks the user). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Shows the one-tap "always run in background" dialog. The counter is the app's core feature
+         and stops working if Android puts it to sleep. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Fonts download and, later, Squads. -->
     <uses-permission android:name="android.permission.INTERNET" />
 

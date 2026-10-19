@@ -122,8 +122,10 @@ class DeviceStatus {
   final bool accessibility;
   final bool serviceRunning;
   final bool battery;
+  final bool backgroundRestricted;
   final bool notifications;
   final int lastEventAt;
+  final String lastError;
   final String manufacturer;
   final String model;
   final int sdk;
@@ -133,8 +135,10 @@ class DeviceStatus {
     required this.accessibility,
     required this.serviceRunning,
     required this.battery,
+    required this.backgroundRestricted,
     required this.notifications,
     required this.lastEventAt,
+    required this.lastError,
     required this.manufacturer,
     required this.model,
     required this.sdk,
@@ -145,8 +149,10 @@ class DeviceStatus {
         accessibility: m['accessibility'] as bool? ?? false,
         serviceRunning: m['serviceRunning'] as bool? ?? false,
         battery: m['battery'] as bool? ?? false,
+        backgroundRestricted: m['backgroundRestricted'] as bool? ?? false,
         notifications: m['notifications'] as bool? ?? false,
         lastEventAt: _int(m['lastEventAt']),
+        lastError: m['lastError'] as String? ?? '',
         manufacturer: m['manufacturer'] as String? ?? '',
         model: m['model'] as String? ?? '',
         sdk: _int(m['sdk']),
@@ -155,7 +161,10 @@ class DeviceStatus {
 
   /// Accessibility is switched on but Android has stopped the counter.
   bool get killed => accessibility && !serviceRunning;
-  bool get healthy => accessibility && serviceRunning;
+  bool get healthy => accessibility && serviceRunning && !backgroundRestricted;
+
+  /// Battery is fully OK only when optimisation is off and background activity isn't restricted.
+  bool get batteryOk => battery && !backgroundRestricted;
 }
 
 class TargetApp {

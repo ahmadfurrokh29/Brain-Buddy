@@ -83,9 +83,20 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                     ),
                     _Check(
                       ok: s.battery,
-                      title: 'Battery unrestricted',
-                      body: 'Stops the phone from closing the counter to save battery.',
+                      title: 'Battery optimisation off',
+                      body: s.battery
+                          ? 'The phone won\'t close the counter to save battery.'
+                          : 'Tap Fix, then "Allow" so the phone doesn\'t close the counter to save battery.',
                       onFix: bridge.openBatterySettings,
+                    ),
+                    _Check(
+                      ok: !s.backgroundRestricted,
+                      title: 'Background activity allowed',
+                      body: s.backgroundRestricted
+                          ? 'Brain Buddy is restricted in the background. Tap Fix → Battery → turn ON "Allow background activity" '
+                              '(Samsung: also remove it from "Sleeping apps").'
+                          : 'Brain Buddy may run in the background.',
+                      onFix: bridge.openAppSettings,
                     ),
                     if (brand.hasAutostart)
                       _Check(
@@ -109,6 +120,15 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                     ),
                   ]),
                 ),
+                if (s.lastError.isNotEmpty) ...[
+                  const SectionTitle('Last problem caught'),
+                  BBCard(
+                    child: SelectableText(
+                      'The counter hit a problem and kept running. If counting seems wrong, send this to support:\n\n${s.lastError}',
+                      style: const TextStyle(color: BB.grey),
+                    ),
+                  ),
+                ],
                 const SectionTitle('Tips for your phone'),
                 BBCard(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

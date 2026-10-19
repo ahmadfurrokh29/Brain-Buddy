@@ -42,10 +42,16 @@ class Db private constructor(context: Context) :
     }
 
     fun addTime(day: String, pkg: String, ms: Long) {
-        writableDatabase.execSQL(
-            "INSERT INTO time_spent(day, pkg, ms) VALUES(?, ?, ?) ON CONFLICT(day, pkg) DO UPDATE SET ms = ms + excluded.ms",
-            arrayOf<Any>(day, pkg, ms),
-        )
+        // Plain UPDATE-then-INSERT: "ON CONFLICT DO UPDATE" needs SQLite 3.24, which Android 9 and older don't have.
+        val w = writableDatabase
+        w.beginTransaction()
+        try {
+            w.execSQL("UPDATE time_spent SET ms = ms + ? WHERE day = ? AND pkg = ?", arrayOf<Any>(ms, day, pkg))
+            w.execSQL("INSERT OR IGNORE INTO time_spent(day, pkg, ms) VALUES(?, ?, ?)", arrayOf<Any>(day, pkg, ms))
+            w.setTransactionSuccessful()
+        } finally {
+            w.endTransaction()
+        }
     }
 
     fun insertUnlock(day: String, kind: String) {
