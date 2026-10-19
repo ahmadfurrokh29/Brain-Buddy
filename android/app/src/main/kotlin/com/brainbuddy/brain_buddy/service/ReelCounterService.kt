@@ -200,7 +200,10 @@ class ReelCounterService : AccessibilityService() {
             appsWithText.add(app.pkg)
             learnChrome(app.pkg, snap.texts)
             startReel(ReelDetector.key(texts), texts, snap.isAd)
-        } else if (waitingForText(now) && (app.showsText || app.pkg in appsWithText || curKey == null)) {
+        } else if ((app.showsText && curKey == null) ||
+            (waitingForText(now) && (app.showsText || app.pkg in appsWithText || curKey == null))
+        ) {
+            // Just opened the app: the first reel always gets its caption, never a guessed count.
             // The reel is still loading its caption. Look again shortly instead of guessing.
             if (pendingScroll && now - emptySince < 300) log("waiting for texts, raw=${snap.texts.take(4)}")
             scheduleEvaluate(300)

@@ -73,13 +73,28 @@ object ReelDetector {
                 if (lower in AD_LABELS || lower.startsWith("sponsored")) isAd = true
                 if (s.length < 3 || s.length > 300) continue
                 if (lower in UI_WORDS || UI_PREFIXES.any { lower.startsWith(it) }) continue
-                if (s.any { it.isDigit() }) continue // like counts, view counts and timers change while watching
+                if (isCounterOrTimer(lower)) continue // like counts, view counts and timers change while watching
                 // Hashtags like "#shorts" or "#viral" are shared by many different reels.
                 if (s.startsWith("#") && s.none { it == ' ' }) continue
                 texts.add(s)
             }
         }
         return Snapshot(texts.sortedByDescending { it.length }, isAd)
+    }
+
+    private val COUNT_WORDS = Regex("""\d[\d.,]*\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?)\b""")
+    private val TIMER = Regex("""\d+:\d{2}|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\b|\b\d+\s*[smhdw]\b""")
+
+    /**
+     * "1.4m", "14k", "13,275 comments", "0:12", "3 days ago" change while a reel plays, so they can't
+     * identify it. Names that merely contain a digit ("@Skinnyfromthe9") are kept.
+     */
+    private fun isCounterOrTimer(lower: String): Boolean {
+        val digits = lower.count { it.isDigit() }
+        if (digits == 0) return false
+        if (COUNT_WORDS.containsMatchIn(lower) || TIMER.containsMatchIn(lower)) return true
+        val meaningful = lower.count { !it.isWhitespace() }
+        return digits * 10 >= meaningful * 4 // mostly digits, e.g. "1,204" or "12.5"
     }
 
     /** Stable id for a reel, used to remember it for the rest of the day. */
