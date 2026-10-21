@@ -33,6 +33,9 @@ class Notifier(private val ctx: Context, private val config: Config) {
         }
     }
 
+    /** "You earned 10 reels by walking 🚶" */
+    fun earned(reels: Int, how: String) = show("You earned $reels reels 🎉", "Nice $how! They're added to today's budget.")
+
     private fun show(title: String, body: String) {
         val nm = NotificationManagerCompat.from(ctx)
         if (!nm.areNotificationsEnabled()) return

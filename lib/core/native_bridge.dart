@@ -37,6 +37,15 @@ class NativeBridge {
   Future<AppConfig> pause(int minutes) async =>
       AppConfig.fromMap((await _method.invokeMethod<Map>('pause', {'minutes': minutes}))!);
 
+  /// Starts a focus session: reels are blocked until it ends, and finishing earns reels.
+  Future<AppConfig> startFocus(int minutes) async =>
+      AppConfig.fromMap((await _method.invokeMethod<Map>('startFocus', {'minutes': minutes}))!);
+
+  /// Gives up the current focus session (no reward).
+  Future<AppConfig> cancelFocus() async => AppConfig.fromMap((await _method.invokeMethod<Map>('cancelFocus'))!);
+
+  Future<void> requestActivityRecognition() => _method.invokeMethod('requestActivityRecognition');
+
   Future<String> exportBackup() async => (await _method.invokeMethod<String>('exportBackup'))!;
   Future<void> importBackup(String json) => _method.invokeMethod('importBackup', {'json': json});
   Future<void> deleteAllData() => _method.invokeMethod('deleteAllData');

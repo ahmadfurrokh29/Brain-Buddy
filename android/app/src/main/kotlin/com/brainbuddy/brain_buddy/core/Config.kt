@@ -191,7 +191,62 @@ class Config(context: Context) {
     /** Extra reels the user allowed themselves today with "5 more reels". */
     fun extraToday(): Int = prefs.getInt("extra_" + today(), 0)
     fun addExtraToday(n: Int) = prefs.edit().putInt("extra_" + today(), extraToday() + n).apply()
-    fun allowanceToday() = budget + extraToday()
+    fun allowanceToday() = budget + extraToday() + earnedToday()
+
+    // ---------------------------------------------------------------- earn your reels
+
+    val earnEnabled get() = prefs.getBoolean("earnEnabled", false)
+    val stepsPerReward get() = prefs.getInt("stepsPerReward", 1000)
+    val focusMinutes get() = prefs.getInt("focusMinutes", 25)
+    val maxEarnPerDay get() = prefs.getInt("maxEarnPerDay", 30)
+
+    fun earnedToday(): Int = prefs.getInt("earned_" + today(), 0)
+    fun stepsToday(): Int = prefs.getInt("steps_" + today(), 0)
+
+    /** Adds earned reels, capped at [maxEarnPerDay]. Returns how many were actually added. */
+    private fun earn(reels: Int): Int {
+        val add = reels.coerceAtMost(maxEarnPerDay - earnedToday()).coerceAtLeast(0)
+        if (add > 0) prefs.edit().putInt("earned_" + today(), earnedToday() + add).apply()
+        return add
+    }
+
+    /**
+     * Feeds the phone's step counter (total steps since the phone started). Returns reels earned now.
+     * The counter resets when the phone restarts, so only the increase since the last reading is used.
+     */
+    fun onStepCounter(total: Float): Int {
+        val last = prefs.getFloat("lastStepCounter", -1f)
+        prefs.edit().putFloat("lastStepCounter", total).apply()
+        if (last < 0 || !earnEnabled) return 0
+        val delta = if (total >= last) (total - last).toInt() else total.toInt()
+        if (delta <= 0) return 0
+        val steps = stepsToday() + delta
+        prefs.edit().putInt("steps_" + today(), steps).apply()
+        val given = prefs.getInt("stepRewards_" + today(), 0)
+        val due = steps / stepsPerReward
+        if (due <= given) return 0
+        prefs.edit().putInt("stepRewards_" + today(), due).apply()
+        return earn((due - given) * REWARD_REELS)
+    }
+
+    var focusUntil: Long
+        get() = prefs.getLong("focusUntil", 0L)
+        set(v) = prefs.edit().putLong("focusUntil", v).apply()
+
+    fun isFocusing(now: Long = System.currentTimeMillis()) = now < focusUntil
+
+    fun startFocus(minutes: Int = focusMinutes) { focusUntil = System.currentTimeMillis() + minutes * 60_000L }
+
+    /** Giving up early earns nothing. */
+    fun cancelFocus() { focusUntil = 0 }
+
+    /** If a focus session has finished, grants its reward once. Returns reels earned. */
+    fun settleFocus(now: Long = System.currentTimeMillis()): Int {
+        val until = focusUntil
+        if (until == 0L || now < until) return 0
+        focusUntil = 0
+        return if (earnEnabled) earn(REWARD_REELS) else 0
+    }
 
     /** Returns true only the first time a warning level is reached on a given day. */
     fun markWarned(level: Int): Boolean {
@@ -222,6 +277,14 @@ class Config(context: Context) {
         "emergencyPerWeek" to emergencyPerWeek,
         "emergencyLeft" to emergencyLeft(),
         "hardLockedUntil" to hardLockedUntil,
+        "earnEnabled" to earnEnabled,
+        "stepsPerReward" to stepsPerReward,
+        "focusMinutes" to focusMinutes,
+        "maxEarnPerDay" to maxEarnPerDay,
+        "earnedToday" to earnedToday(),
+        "stepsToday" to stepsToday(),
+        "focusUntil" to focusUntil,
+        "rewardReels" to REWARD_REELS,
         "schedules" to schedulesJson,
         "appBudgets" to appBudgetsJson,
         "activeSchedule" to (activeSchedule()?.let { mapOf("id" to it.id, "name" to it.name, "until" to it.until) } ?: emptyMap<String, Any>()),
@@ -246,7 +309,9 @@ class Config(context: Context) {
             }
             when (k) {
                 KEY_TRACKED -> e.putStringSet(KEY_TRACKED, (v as List<*>).map { it.toString() }.toSet())
-                "budget", "dwellSec", "dayStartHour", "intentWaitSec", "emergencyPerWeek" -> e.putInt(k as String, (v as Number).toInt())
+                "budget", "dwellSec", "dayStartHour", "intentWaitSec", "emergencyPerWeek",
+                "stepsPerReward", "focusMinutes", "maxEarnPerDay" -> e.putInt(k as String, (v as Number).toInt())
+                "earnEnabled" -> e.putBoolean("earnEnabled", v as Boolean)
                 "lockMode", "hardDuration" -> e.putString(k as String, v as String)
                 "schedules" -> if (keepsActiveSchedule(v as String)) e.putString("schedules", v)
                 "appBudgets" -> e.putString("appBudgets", v as String)
@@ -262,6 +327,8 @@ class Config(context: Context) {
 
     companion object {
         private const val KEY_TRACKED = "tracked"
+        /** Reels earned per 1,000 steps (or per [stepsPerReward]) and per finished focus session. */
+        const val REWARD_REELS = 10
 
         /** The "day" a moment belongs to. A day can start later than midnight for night owls. */
         fun dayKey(ts: Long, dayStartHour: Int): String {

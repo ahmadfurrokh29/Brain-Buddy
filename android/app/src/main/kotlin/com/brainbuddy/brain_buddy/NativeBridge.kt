@@ -56,7 +56,26 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
     }
 
     private fun handle(call: MethodCall): Any? = when (call.method) {
-        "getConfig" -> config.toMap()
+        "getConfig" -> {
+            config.settleFocus()
+            config.toMap()
+        }
+        "startFocus" -> {
+            config.startFocus(call.argument<Int>("minutes") ?: config.focusMinutes)
+            afterDataChange()
+            config.toMap()
+        }
+        "cancelFocus" -> {
+            config.cancelFocus()
+            afterDataChange()
+            config.toMap()
+        }
+        "requestActivityRecognition" -> {
+            if (Build.VERSION.SDK_INT >= 29) {
+                ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 8)
+            }
+            true
+        }
         "setConfig" -> {
             config.apply(call.arguments as Map<*, *>)
             afterDataChange()

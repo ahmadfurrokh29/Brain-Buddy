@@ -3,6 +3,10 @@ package com.brainbuddy.brain_buddy.service
 import android.accessibilityservice.AccessibilityService
 import android.content.pm.ApplicationInfo
 import android.graphics.Rect
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.text.format.DateFormat
 import java.util.Date
 import android.os.Handler
@@ -101,6 +105,8 @@ class ReelCounterService : AccessibilityService() {
         overlays = Overlays(this)
         notifier = Notifier(this, config)
         refreshDay()
+        updateStepListener()
+        scheduleFocusEnd()
         instance = this
         lastEventAt = System.currentTimeMillis()
         main.post(tick)
@@ -151,6 +157,8 @@ class ReelCounterService : AccessibilityService() {
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
+        stepListener?.let { getSystemService(SensorManager::class.java)?.unregisterListener(it) }
+        stepListener = null
         if (::overlays.isInitialized) overlays.hideAll()
         flushTime()
         instance = null
@@ -390,6 +398,11 @@ class ReelCounterService : AccessibilityService() {
     private fun enforceLimits(): Boolean {
         if (overlays.isLockShowing) return true
         val now = System.currentTimeMillis()
+        config.settleFocus(now)
+        if (config.isFocusing(now)) {
+            showFocusLock()
+            return true
+        }
         config.activeSchedule(now)?.let { s ->
             showScheduleLock(s)
             return true
@@ -506,6 +519,66 @@ class ReelCounterService : AccessibilityService() {
         )
     }
 
+    private fun showFocusLock() {
+        overlays.hideIntent()
+        val time = DateFormat.getTimeFormat(this).format(Date(config.focusUntil))
+        overlays.showHardLock(
+            "Focus time",
+            "You're in a focus session until $time. Finish it to earn ${Config.REWARD_REELS} reels.",
+            emergencyLeft = 0,
+            onClose = { safe("lockClose") { goHome() } },
+            onEmergency = null,
+        )
+    }
+
+    private val focusEnd = Runnable {
+        safe("focusEnd") {
+            val earned = config.settleFocus()
+            if (earned > 0) notifier.earned(earned, "focusing")
+            if (overlays.isLockShowing && !config.isFocusing()) overlays.hideLock()
+            CountBus.emit()
+        }
+    }
+
+    /** Wakes up when a focus session ends to give its reward, even if no reel app is open. */
+    private fun scheduleFocusEnd() {
+        main.removeCallbacks(focusEnd)
+        val left = config.focusUntil - System.currentTimeMillis()
+        if (config.focusUntil > 0) main.postDelayed(focusEnd, left.coerceAtLeast(0) + 500)
+    }
+
+    // ---------------------------------------------------------------- steps
+
+    private var stepListener: SensorEventListener? = null
+
+    /** Listens to the phone's step counter while "Earn your reels" is on. Uses almost no battery. */
+    private fun updateStepListener() {
+        val sensors = getSystemService(SensorManager::class.java) ?: return
+        val wanted = config.earnEnabled
+        if (wanted && stepListener == null) {
+            val sensor = sensors.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    safe("steps") {
+                        val earned = config.onStepCounter(event.values[0])
+                        if (earned > 0) {
+                            notifier.earned(earned, "walking")
+                            if (reelsPkg != null && config.floatingCounter) overlays.updateCounter(db.watchedCount(day), config.allowanceToday())
+                            BrainWidgetProvider.refresh(this@ReelCounterService)
+                        }
+                        CountBus.emit()
+                    }
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            }
+            sensors.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            stepListener = listener
+        } else if (!wanted && stepListener != null) {
+            sensors.unregisterListener(stepListener)
+            stepListener = null
+        }
+    }
+
     private fun showScheduleLock(s: Config.ActiveSchedule) {
         overlays.hideIntent()
         val time = DateFormat.getTimeFormat(this).format(Date(s.until))
@@ -587,6 +660,8 @@ class ReelCounterService : AccessibilityService() {
     fun reload() {
         day = ""
         refreshDay()
+        updateStepListener()
+        scheduleFocusEnd()
         BrainWidgetProvider.refresh(this)
     }
 

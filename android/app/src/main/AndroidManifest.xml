@@ -5,6 +5,8 @@
     <!-- Shows the one-tap "always run in background" dialog. The counter is the app's core feature
          and stops working if Android puts it to sleep. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- "Earn your reels" reads the phone's step counter (Android 10+ asks the user). -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Fonts download and, later, Squads. -->
     <uses-permission android:name="android.permission.INTERNET" />
 

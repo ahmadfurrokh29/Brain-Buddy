@@ -6,6 +6,7 @@ import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import 'app_budgets.dart';
+import 'earn_reels.dart';
 import 'schedules.dart';
 
 class LimitsScreen extends ConsumerWidget {
@@ -103,6 +104,8 @@ class _LimitsBody extends ConsumerWidget {
         ),
         SchedulesSection(c: c),
         AppBudgetsSection(c: c),
+        const SizedBox(height: 20),
+        EarnReelsCard(c: c, showSettings: true),
         const SectionTitle('Before you scroll'),
         BBCard(
           padding: EdgeInsets.zero,

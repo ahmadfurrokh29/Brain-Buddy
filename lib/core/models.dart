@@ -66,6 +66,16 @@ class AppConfig {
   final int hardLockedUntil;
   final List<Schedule> schedules;
 
+  // Earn your reels: steps and focus sessions add reels to today's budget.
+  final bool earnEnabled;
+  final int stepsPerReward;
+  final int focusMinutes;
+  final int maxEarnPerDay;
+  final int earnedToday;
+  final int stepsToday;
+  final int focusUntil;
+  final int rewardReels;
+
   /// Optional daily limits for single apps, by package name.
   final Map<String, int> appBudgets;
 
@@ -74,6 +84,14 @@ class AppConfig {
   final int activeScheduleUntil;
 
   const AppConfig({
+    required this.earnEnabled,
+    required this.stepsPerReward,
+    required this.focusMinutes,
+    required this.maxEarnPerDay,
+    required this.earnedToday,
+    required this.stepsToday,
+    required this.focusUntil,
+    required this.rewardReels,
     required this.schedules,
     required this.appBudgets,
     required this.activeScheduleId,
@@ -100,6 +118,14 @@ class AppConfig {
   });
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
+        earnEnabled: m['earnEnabled'] as bool? ?? false,
+        stepsPerReward: _int(m['stepsPerReward']),
+        focusMinutes: _int(m['focusMinutes']),
+        maxEarnPerDay: _int(m['maxEarnPerDay']),
+        earnedToday: _int(m['earnedToday']),
+        stepsToday: _int(m['stepsToday']),
+        focusUntil: _int(m['focusUntil']),
+        rewardReels: _int(m['rewardReels']),
         schedules: ((jsonDecode(m['schedules'] as String? ?? '[]') as List).cast<Map<String, dynamic>>()).map(Schedule.fromJson).toList(),
         appBudgets: (jsonDecode(m['appBudgets'] as String? ?? '{}') as Map).map((k, v) => MapEntry(k as String, _int(v))),
         activeScheduleId: (m['activeSchedule'] as Map?)?['id'] as String?,
@@ -125,7 +151,8 @@ class AppConfig {
         extraToday: _int(m['extraToday']),
       );
 
-  int get allowanceToday => budget + extraToday;
+  int get allowanceToday => budget + extraToday + earnedToday;
+  bool get isFocusing => DateTime.now().millisecondsSinceEpoch < focusUntil;
   bool get isPaused => DateTime.now().millisecondsSinceEpoch < pausedUntil;
 
   /// A Hard lock is running: reels are blocked and rules can't be loosened until it ends.
