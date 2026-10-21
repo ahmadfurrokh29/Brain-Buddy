@@ -52,6 +52,10 @@ class ReelCounterService : AccessibilityService() {
     private val chrome = HashMap<String, HashMap<String, Int>>()
     /** Apps that show readable reel text. For these we never fall back to "one reel per swipe". */
     private val appsWithText = HashSet<String>()
+
+    /** Reel number on screen as reported by the app's pager, and the number of the current reel. -1 = unknown. */
+    private var pagerIndex = -1
+    private var curIndex = -1
     private var emptySince = 0L
     private val debug by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var fallbackCounter = 0
@@ -106,6 +110,8 @@ class ReelCounterService : AccessibilityService() {
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && isReelSwipe(event)) {
             pendingScroll = true
             lastScrollAt = lastEventAt
+            // Pagers (Instagram, Facebook) report which reel number is on screen. YouTube reports -1.
+            if (event.fromIndex >= 0 && event.fromIndex == event.toIndex) pagerIndex = event.fromIndex
         }
         // Reels screens send many events per second (video progress); look at the screen at most every 250 ms.
         scheduleEvaluate(250)
@@ -239,8 +245,9 @@ class ReelCounterService : AccessibilityService() {
     }
 
     private fun startReel(key: String, texts: List<String>?, isAd: Boolean) {
-        log("new reel $key ad=$isAd swipe=$pendingScroll texts=${texts?.take(3)}")
+        log("new reel $key ad=$isAd swipe=$pendingScroll index=$pagerIndex texts=${texts?.take(3)}")
         finishReel()
+        recordFlownPastReels()
         val now = System.currentTimeMillis()
         // The reel appeared when the swipe ended, not when its caption finished loading
         // (YouTube fades its texts in ~1.5 s later). The watch time runs from the swipe.
@@ -254,12 +261,36 @@ class ReelCounterService : AccessibilityService() {
         main.postDelayed(watchCheck, (config.dwellSec * 1000L - (now - shownSince)).coerceAtLeast(0))
     }
 
+    /**
+     * A very fast flick can pass reels before their caption is ever read. When the app reports reel
+     * numbers (e.g. 41 → 45), the reels in between (42, 43, 44) were seen for a split second: skimmed.
+     */
+    private fun recordFlownPastReels() {
+        val pkg = reelsPkg ?: return
+        val from = curIndex
+        curIndex = pagerIndex
+        if (from < 0 || pagerIndex < 0) return
+        val missed = pagerIndex - from - 1
+        if (missed <= 0) return
+        // Cap it: a jump of dozens means the app reloaded its list, not that the user flew past them.
+        if (missed > MAX_FLOWN_PAST) return
+        for (i in from + 1 until pagerIndex) {
+            val key = "pass-$pkg-$i-${System.currentTimeMillis()}"
+            counted.add(key)
+            db.insertEvent(day, pkg, key, "skimmed")
+        }
+        log("flown past $missed reels ($from → $pagerIndex), saved as skimmed")
+        CountBus.emit()
+    }
+
     /** Called when the user moves on from a reel: if it never reached the watch time, it was skimmed. */
     private fun finishReel() {
         val key = curKey ?: return
         val pkg = reelsPkg ?: return
         val shown = System.currentTimeMillis() - curStart
-        if (!curDone && !curIsAd && shown > 300 && key !in counted) {
+        // With "Ignore ads" off, ads are treated like any other reel, so a quickly skipped ad is skimmed too.
+        val ignoredAd = curIsAd && config.ignoreAds
+        if (!curDone && !ignoredAd && shown > 300 && key !in counted) {
             log("skimmed $key after ${shown}ms")
             counted.add(key)
             db.insertEvent(day, pkg, key, "skimmed")
@@ -307,6 +338,8 @@ class ReelCounterService : AccessibilityService() {
         reelsPkg = pkg
         curTexts = null
         pendingScroll = false
+        pagerIndex = -1
+        curIndex = -1
         val watched = db.watchedCount(day)
         val allowance = config.allowanceToday()
         if (config.floatingCounter) overlays.showCounter(watched, allowance)
@@ -403,6 +436,7 @@ class ReelCounterService : AccessibilityService() {
         private const val SETTLE_MS = 400L
         private const val TEXT_WAIT_MS = 3000L
         private const val SWIPE_TEXT_WAIT_MS = 1500L
+        private const val MAX_FLOWN_PAST = 10
         /** After a swipe, how long to keep looking for the new reel before deciding the swipe bounced back. */
         private const val SWIPE_RECHECK_MS = 2500L
         /** Longest gap between a swipe and its reel's caption appearing that still counts from the swipe. */
