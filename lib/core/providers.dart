@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +23,9 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   Future<void> set(Map<String, Object?> values) async {
     state = AsyncData(await ref.read(bridgeProvider).setConfig(values));
   }
+
+  Future<void> setSchedules(List<Schedule> schedules) =>
+      set({'schedules': jsonEncode(schedules.map((s) => s.toJson()).toList())});
 
   Future<void> pause(int minutes) async {
     state = AsyncData(await ref.read(bridgeProvider).pause(minutes));

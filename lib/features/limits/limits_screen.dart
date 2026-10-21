@@ -5,6 +5,7 @@ import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import 'schedules.dart';
 
 class LimitsScreen extends ConsumerWidget {
   const LimitsScreen({super.key});
@@ -31,12 +32,16 @@ class _LimitsBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
     final cfg = ref.read(configProvider.notifier);
-    final locked = c.isHardLocked;
+    final locked = c.isLocked;
+    final scheduleName = c.schedules.where((s) => s.id == c.activeScheduleId).firstOrNull?.name;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       children: [
         if (locked) ...[
-          _HardLockBanner(until: DateTime.fromMillisecondsSinceEpoch(c.hardLockedUntil)),
+          _HardLockBanner(
+            what: scheduleName ?? 'Hard lock',
+            until: DateTime.fromMillisecondsSinceEpoch(scheduleName != null ? c.activeScheduleUntil : c.hardLockedUntil),
+          ),
           const SizedBox(height: 12),
         ],
         BBCard(
@@ -95,6 +100,7 @@ class _LimitsBody extends ConsumerWidget {
           onTap: () => cfg.set({'lockMode': 'hard'}),
           child: c.lockMode == 'hard' ? _HardOptions(c: c, locked: locked) : null,
         ),
+        SchedulesSection(c: c),
         const SectionTitle('Before you scroll'),
         BBCard(
           padding: EdgeInsets.zero,
@@ -132,8 +138,9 @@ class _LimitsBody extends ConsumerWidget {
 }
 
 class _HardLockBanner extends StatelessWidget {
+  final String what;
   final DateTime until;
-  const _HardLockBanner({required this.until});
+  const _HardLockBanner({required this.what, required this.until});
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +154,7 @@ class _HardLockBanner extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            'Hard lock is on until $time${sameDay ? '' : ' tomorrow'}. You can make your rules stricter, but not looser, until then.',
+            '$what is on until $time${sameDay ? '' : ' tomorrow'}. You can make your rules stricter, but not looser, until then.',
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),

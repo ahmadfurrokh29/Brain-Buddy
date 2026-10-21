@@ -1,8 +1,43 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
+
+/// A time window when reels are blocked, e.g. Bedtime 23:00–07:00. Times are minutes after midnight;
+/// days are 1 (Monday) to 7 (Sunday). A window can run past midnight.
+class Schedule {
+  final String id;
+  final String name;
+  final int start;
+  final int end;
+  final List<int> days;
+  final bool enabled;
+
+  const Schedule({required this.id, required this.name, required this.start, required this.end, required this.days, this.enabled = true});
+
+  factory Schedule.fromJson(Map<String, dynamic> j) => Schedule(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? 'Schedule',
+        start: _int(j['start']),
+        end: _int(j['end']),
+        days: ((j['days'] as List?) ?? const []).map(_int).toList(),
+        enabled: j['enabled'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'start': start, 'end': end, 'days': days, 'enabled': enabled};
+
+  Schedule copyWith({String? name, int? start, int? end, List<int>? days, bool? enabled}) => Schedule(
+        id: id,
+        name: name ?? this.name,
+        start: start ?? this.start,
+        end: end ?? this.end,
+        days: days ?? this.days,
+        enabled: enabled ?? this.enabled,
+      );
+}
 
 /// User settings, owned by the native side so the counter can use them in the background.
 class AppConfig {
@@ -29,8 +64,16 @@ class AppConfig {
   final int emergencyPerWeek;
   final int emergencyLeft;
   final int hardLockedUntil;
+  final List<Schedule> schedules;
+
+  /// The schedule blocking reels right now, if any.
+  final String? activeScheduleId;
+  final int activeScheduleUntil;
 
   const AppConfig({
+    required this.schedules,
+    required this.activeScheduleId,
+    required this.activeScheduleUntil,
     required this.lockMode,
     required this.hardDuration,
     required this.emergencyPerWeek,
@@ -53,6 +96,9 @@ class AppConfig {
   });
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
+        schedules: ((jsonDecode(m['schedules'] as String? ?? '[]') as List).cast<Map<String, dynamic>>()).map(Schedule.fromJson).toList(),
+        activeScheduleId: (m['activeSchedule'] as Map?)?['id'] as String?,
+        activeScheduleUntil: _int((m['activeSchedule'] as Map?)?['until']),
         lockMode: m['lockMode'] as String? ?? 'gentle',
         hardDuration: m['hardDuration'] as String? ?? 'tomorrow',
         emergencyPerWeek: _int(m['emergencyPerWeek']),
@@ -79,6 +125,9 @@ class AppConfig {
 
   /// A Hard lock is running: reels are blocked and rules can't be loosened until it ends.
   bool get isHardLocked => DateTime.now().millisecondsSinceEpoch < hardLockedUntil;
+
+  /// Reels are blocked right now by a Hard lock or a schedule; rules can only get stricter.
+  bool get isLocked => isHardLocked || activeScheduleId != null;
 }
 
 class AppStat {

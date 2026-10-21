@@ -62,6 +62,7 @@ class ReelCounterService : AccessibilityService() {
     private var pagerSource: String? = null
     private var curIndexSource: String? = null
     private var emptySince = 0L
+    private var ticksInReels = 0
     private val debug by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var fallbackCounter = 0
     private var evalScheduled = false
@@ -389,6 +390,10 @@ class ReelCounterService : AccessibilityService() {
     private fun enforceLimits(): Boolean {
         if (overlays.isLockShowing) return true
         val now = System.currentTimeMillis()
+        config.activeSchedule(now)?.let { s ->
+            showScheduleLock(s)
+            return true
+        }
         endExpiredHardLock(now)
         if (config.isHardLocked(now)) {
             showHardLock()
@@ -437,6 +442,25 @@ class ReelCounterService : AccessibilityService() {
         )
     }
 
+    private fun showScheduleLock(s: Config.ActiveSchedule) {
+        overlays.hideIntent()
+        val time = DateFormat.getTimeFormat(this).format(Date(s.until))
+        overlays.showHardLock(
+            "${s.name}: reels are off",
+            "Your ${s.name.lowercase()} schedule blocks reels until $time. Messages and stories still work.",
+            config.emergencyLeft(),
+            onClose = { safe("lockClose") { goHome() } },
+            onEmergency = {
+                safe("scheduleEmergency") {
+                    config.useEmergency()
+                    config.snoozeSchedule(s)
+                    db.insertUnlock(day, "schedule_emergency", s.name)
+                    CountBus.emit()
+                }
+            },
+        )
+    }
+
     /** A 1 h / 3 h Hard lock that ended during the same day gives 5 more reels, then locks again at the new limit. */
     private fun endExpiredHardLock(now: Long) {
         val until = config.hardLockedUntil
@@ -475,6 +499,8 @@ class ReelCounterService : AccessibilityService() {
         if (config.isPaused()) { leaveReels(); return }
         unsavedMs += 1000
         if (unsavedMs >= 5000) flushTime()
+        // A schedule can start, or a Hard lock end, while the user is already watching reels.
+        if (++ticksInReels % 30 == 0) enforceLimits()
     }
 
     private fun flushTime() {
