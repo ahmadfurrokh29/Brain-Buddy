@@ -418,9 +418,9 @@ class ReelCounterService : AccessibilityService() {
         overlays.hideIntent()
         when (config.lockMode) {
             "firm" -> overlays.showFirmLock(
-                watched, allowance, FIRM_WAIT_SEC,
+                watched, allowance, config.firmWaitLeft(FIRM_WAIT_SEC),
                 onClose = { safe("lockClose") { goHome() } },
-                onUnlock = { reason -> safe("firmUnlock") { allowMore(5, "firm", reason) } },
+                onUnlock = { reason -> safe("firmUnlock") { config.firmReadyAt = 0; allowMore(5, "firm", reason) } },
             )
             "hard" -> {
                 config.startHardLock(now)
@@ -457,9 +457,9 @@ class ReelCounterService : AccessibilityService() {
         overlays.hideIntent()
         when (config.lockMode) {
             "firm" -> overlays.showFirmLock(
-                appWatched, appAllowance, FIRM_WAIT_SEC, appName = name,
+                appWatched, appAllowance, config.firmWaitLeft(FIRM_WAIT_SEC), appName = name,
                 onClose = { safe("lockClose") { goHome() } },
-                onUnlock = { reason -> safe("appFirm") { allowMoreInApp(pkg, 5, "app_firm", reason) } },
+                onUnlock = { reason -> safe("appFirm") { config.firmReadyAt = 0; allowMoreInApp(pkg, 5, "app_firm", reason) } },
             )
             "hard" -> {
                 config.startAppHardLock(pkg, now)

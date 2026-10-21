@@ -96,6 +96,18 @@ class AppTheme {
         thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.white : null),
         trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? BB.mint : null),
       ),
+      // Pop-up messages: light mint card with dark text, readable on both themes.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: BB.mintLight,
+        elevation: 4,
+        contentTextStyle: GoogleFonts.nunito(color: BB.ink, fontSize: 15, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: BB.mint, width: 1.5),
+        ),
+        actionTextColor: BB.mintDark,
+      ),
       // The selected tab gets a soft mint highlight with a mint icon, so the icon never blends into it.
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: dark ? const Color(0xFF171717) : Colors.white,

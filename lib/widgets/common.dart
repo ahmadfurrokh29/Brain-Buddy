@@ -147,5 +147,11 @@ String formatMinutes(int minutes) {
 void showSnack(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+    ..showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.info_rounded, color: BB.mintDark),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message)),
+      ]),
+    ));
 }

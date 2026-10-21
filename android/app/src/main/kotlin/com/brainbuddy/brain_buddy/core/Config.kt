@@ -42,6 +42,20 @@ class Config(context: Context) {
     val hardDuration get() = prefs.getString("hardDuration", "tomorrow") ?: "tomorrow"
     val emergencyPerWeek get() = prefs.getInt("emergencyPerWeek", 1)
 
+    /**
+     * When the current Firm-lock wait ends. Saved, so leaving the app or turning the screen off doesn't
+     * restart the 60 seconds. Cleared after an unlock.
+     */
+    var firmReadyAt: Long
+        get() = prefs.getLong("firmReadyAt", 0L)
+        set(v) = prefs.edit().putLong("firmReadyAt", v).apply()
+
+    /** Seconds left in the Firm-lock wait, starting it if none is running. */
+    fun firmWaitLeft(waitSec: Int, now: Long = System.currentTimeMillis()): Int {
+        if (firmReadyAt == 0L) firmReadyAt = now + waitSec * 1000L
+        return ((firmReadyAt - now + 999) / 1000).toInt().coerceAtLeast(0)
+    }
+
     var hardLockedUntil: Long
         get() = prefs.getLong("hardLockedUntil", 0L)
         set(v) = prefs.edit().putLong("hardLockedUntil", v).apply()

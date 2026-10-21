@@ -13,13 +13,19 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -154,8 +160,9 @@ class Overlays(private val ctx: Context) {
         val (root, actions) = lockScreen(Mood.MELTED, "Time for a brain break", limitMessage(watched, budget, appName), breathing = true)
         actions.addView(button("Close app", primary = true) { hideLock(); onClose() })
         actions.addView(button("5 more reels", primary = false) { hideLock(); onMore() }.withTop(8))
-        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
+        if (!add(root, lockParams(focusable = false))) return
         lock = root
+        quietMedia()
         // One full breath before the buttons appear.
         revealLater(actions, 8000)
     }
@@ -184,19 +191,27 @@ class Overlays(private val ctx: Context) {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         })
+        reason.apply {
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            setOnEditorActionListener { v, _, _ -> hideKeyboard(v); true }
+        }
+        val close = button("Close app", primary = true) { hideKeyboard(reason); hideLock(); onClose() }
         actions.addView(countdown)
         actions.addView(reason.withTop(8))
         actions.addView(unlock.withTop(10))
-        actions.addView(button("Close app", primary = true) { hideLock(); onClose() }.withTop(10))
+        actions.addView(close.withTop(10))
         actions.visibility = View.VISIBLE
 
-        // Focusable so the keyboard can type the reason.
-        val lp = baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
-            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        // Back works like "Close app", so the lock can never trap the user.
+        root.onBack = { hideKeyboard(reason); hideLock(); onClose() }
+        // Focusable so the keyboard can type the reason; the screen pans so the box and buttons stay visible.
+        val lp = lockParams(focusable = true).apply {
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         }
         if (!add(root, lp)) return
         lock = root
+        quietMedia()
 
         var left = waitSec
         val ticker = object : Runnable {
@@ -236,8 +251,9 @@ class Overlays(private val ctx: Context) {
             actions.addView(emergency.withTop(10))
         }
         actions.visibility = View.VISIBLE
-        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
+        if (!add(root, lockParams(focusable = false))) return
         lock = root
+        quietMedia()
     }
 
     fun hideLock() {
@@ -245,10 +261,48 @@ class Overlays(private val ctx: Context) {
         breathing = null
         lock?.let { remove(it) }
         lock = null
+        releaseMedia()
+    }
+
+    // ---------------------------------------------------------------- quieting the reel behind a lock
+
+    private val audio = ctx.getSystemService(AudioManager::class.java)
+    private var focusRequest: AudioFocusRequest? = null
+
+    /**
+     * Takes audio focus and sends "pause", so Instagram/YouTube stop playing the reel behind the lock
+     * instead of looping it.
+     */
+    private fun quietMedia() {
+        if (focusRequest != null) return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener { }
+            .build()
+        try {
+            audio.requestAudioFocus(request)
+            focusRequest = request
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+        } catch (_: Exception) {}
+    }
+
+    private fun releaseMedia() {
+        focusRequest?.let { try { audio.abandonAudioFocusRequest(it) } catch (_: Exception) {} }
+        focusRequest = null
+    }
+
+    private fun hideKeyboard(v: View) {
+        ctx.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0)
     }
 
     /** Shared layout for all lock screens: brain, title, message, optional breathing circle, actions area. */
-    private fun lockScreen(mood: Mood, title: String, message: String, breathing: Boolean): Pair<LinearLayout, LinearLayout> {
+    private fun lockScreen(mood: Mood, title: String, message: String, breathing: Boolean): Pair<LockLayout, LinearLayout> {
         val root = column(MINT_LIGHT)
         root.addView(BrainView(ctx).apply { this.mood = mood }, LinearLayout.LayoutParams(dp(120), dp(120)))
         root.addView(text(title, 26f, bold = true).withTop(12))
@@ -324,7 +378,7 @@ class Overlays(private val ctx: Context) {
         buttons.addView(button("Close app", primary = true) { hideIntent(); onClose() }.withTop(18))
         root.addView(buttons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(28) })
 
-        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
+        if (!add(root, lockParams(focusable = false))) return
         intent = root
         main.postDelayed({ buttons.visibility = View.VISIBLE; buttons.alpha = 0f; buttons.animate().alpha(1f).start() }, waitSec * 1000L)
     }
@@ -337,6 +391,17 @@ class Overlays(private val ctx: Context) {
     fun hideAll() { hideCounter(); hideLock(); hideIntent() }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * Full-screen pop-up that stops above the navigation bar, so Back and Home always stay usable.
+     * [focusable] is only for the Firm lock, which needs the keyboard.
+     */
+    private fun lockParams(focusable: Boolean) = WindowManager.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        PixelFormat.TRANSLUCENT,
+    )
 
     private fun baseParams(w: Int, h: Int) = WindowManager.LayoutParams(
         w, h,
@@ -352,7 +417,19 @@ class Overlays(private val ctx: Context) {
         try { wm.removeView(v) } catch (_: Exception) {}
     }
 
-    private fun column(bg: Int) = LinearLayout(ctx).apply {
+    /** Pop-up root that turns the Back key into an action (only reachable when the window has focus). */
+    private class LockLayout(context: Context) : LinearLayout(context) {
+        var onBack: (() -> Unit)? = null
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK && onBack != null) {
+                if (event.action == KeyEvent.ACTION_UP) onBack?.invoke()
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
+    }
+
+    private fun column(bg: Int) = LockLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
         setBackgroundColor(bg)
