@@ -56,6 +56,9 @@ class ReelCounterService : AccessibilityService() {
     /** Reel number on screen as reported by the app's pager, and the number of the current reel. -1 = unknown. */
     private var pagerIndex = -1
     private var curIndex = -1
+    /** Which list reported the number. Facebook's outer tab switcher reports its own numbers too. */
+    private var pagerSource: String? = null
+    private var curIndexSource: String? = null
     private var emptySince = 0L
     private val debug by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var fallbackCounter = 0
@@ -111,7 +114,10 @@ class ReelCounterService : AccessibilityService() {
             pendingScroll = true
             lastScrollAt = lastEventAt
             // Pagers (Instagram, Facebook) report which reel number is on screen. YouTube reports -1.
-            if (event.fromIndex >= 0 && event.fromIndex == event.toIndex) pagerIndex = event.fromIndex
+            if (event.fromIndex >= 0 && event.fromIndex == event.toIndex) {
+                pagerIndex = event.fromIndex
+                pagerSource = event.className?.toString()
+            }
         }
         // Reels screens send many events per second (video progress); look at the screen at most every 250 ms.
         scheduleEvaluate(250)
@@ -186,10 +192,10 @@ class ReelCounterService : AccessibilityService() {
             val cur = curTexts
             if (cur != null) {
                 val overlap = ReelDetector.overlap(cur, texts)
-                // Same reel if most texts match, or if some still match and nothing was swiped
-                // (a caption expanding, "Use this sound" popping up…). Completely different texts
-                // are always a new reel, even without a swipe event (YouTube doesn't always send one).
-                val sameReel = overlap >= 0.5 || (!pendingScroll && overlap > 0)
+                // Same reel if at least half its texts are still there (a caption expanding or
+                // "Use this sound" popping up keeps the rest). Mostly different texts are a new reel,
+                // even without a swipe event: YouTube, Snapchat and Reddit don't always send one.
+                val sameReel = overlap >= 0.5
                 if (sameReel) {
                     if (snap.isAd) curIsAd = true
                     if (pendingScroll && now - lastScrollAt < SWIPE_RECHECK_MS) {
@@ -268,8 +274,10 @@ class ReelCounterService : AccessibilityService() {
     private fun recordFlownPastReels() {
         val pkg = reelsPkg ?: return
         val from = curIndex
+        val sameList = curIndexSource == pagerSource
         curIndex = pagerIndex
-        if (from < 0 || pagerIndex < 0) return
+        curIndexSource = pagerSource
+        if (from < 0 || pagerIndex < 0 || !sameList) return
         val missed = pagerIndex - from - 1
         if (missed <= 0) return
         // Cap it: a jump of dozens means the app reloaded its list, not that the user flew past them.
@@ -340,6 +348,8 @@ class ReelCounterService : AccessibilityService() {
         pendingScroll = false
         pagerIndex = -1
         curIndex = -1
+        pagerSource = null
+        curIndexSource = null
         val watched = db.watchedCount(day)
         val allowance = config.allowanceToday()
         if (config.floatingCounter) overlays.showCounter(watched, allowance)

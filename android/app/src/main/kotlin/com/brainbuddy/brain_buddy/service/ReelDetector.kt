@@ -31,20 +31,26 @@ object ReelDetector {
         "library", "more options", "navigate up", "go back", "action menu", "sound", "add", "notifications",
         "play video", "pause video", "captions", "settings", "report", "not interested", "use this sound",
         "more actions", "new content available", "youtube premium", "privacy setting public",
+        "reels tab details", "tap to show video controls", "video, overlays visible", "video buttons are active",
+        "track position", "upvote", "downvote", "unmute", "add friends", "story sent", "spotlight",
     )
+
+    /** Bottom-tab labels such as "Home, tab 1 of 6". */
+    private val TAB_LABEL = Regex(""",?\s*tab \d+ of \d+$""")
 
     /** Button descriptions that start the same on every reel ("Like this video along with …"). */
     private val UI_PREFIXES = listOf(
         "like this", "dislike this", "share this", "remix this", "view comments", "subscribe to", "comments.",
         "see more videos using this sound", "go to channel", "double tap", "tap to", "swipe",
         "subscriptions", "navigate to your reels profile", "enter full-screen", "are you interested in this",
+        "opera_content_index",
     )
 
     private val AD_LABELS = setOf("sponsored", "ad", "promoted", "sponsored ·", "ad ·")
 
     fun isReelsScreen(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): Boolean {
         for (id in app.markerIds) {
-            val found = root.findAccessibilityNodeInfosByViewId("${app.pkg}:id/$id")
+            val found = findById(root, app, id)
             if (found.any { it.isVisibleToUser }) return true
         }
         val pager = findFullScreenScroller(root, screen) ?: return false
@@ -59,7 +65,7 @@ object ReelDetector {
      * and app chrome outside the current page, are left out.
      */
     fun snapshot(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): Snapshot {
-        val scope = pageById(root, app, screen) ?: currentPage(root, screen) ?: root
+        val scope = pageById(root, app, screen) ?: currentPage(root, app, screen) ?: root
         val texts = LinkedHashSet<String>()
         var isAd = false
         val r = Rect()
@@ -73,6 +79,7 @@ object ReelDetector {
                 if (lower in AD_LABELS || lower.startsWith("sponsored")) isAd = true
                 if (s.length < 3 || s.length > 300) continue
                 if (lower in UI_WORDS || UI_PREFIXES.any { lower.startsWith(it) }) continue
+                if (TAB_LABEL.containsMatchIn(lower)) continue
                 if (isCounterOrTimer(lower)) continue // like counts, view counts and timers change while watching
                 // Hashtags like "#shorts" or "#viral" are shared by many different reels.
                 if (s.startsWith("#") && s.none { it == ' ' }) continue
@@ -82,7 +89,7 @@ object ReelDetector {
         return Snapshot(texts.sortedByDescending { it.length }, isAd)
     }
 
-    private val COUNT_WORDS = Regex("""\d[\d.,]*\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?)\b""")
+    private val COUNT_WORDS = Regex("""\d[\d.,]*\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?|votes?|reactions?)\b""")
     private val TIMER = Regex("""\d+:\d{2}|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\b|\b\d+\s*[smhdw]\b""")
 
     /**
@@ -109,6 +116,22 @@ object ReelDetector {
         return shared.toDouble() / minOf(a.size, setB.size)
     }
 
+    /**
+     * Classic Android views have ids like "com.app:id/name" and Android can look them up directly.
+     * Jetpack Compose screens (Reddit) expose plain tags like "name" that the direct lookup can't find,
+     * so for those the screen is walked and ids compared.
+     */
+    private fun findById(root: AccessibilityNodeInfo, app: TargetApp, id: String): List<AccessibilityNodeInfo> {
+        val direct = root.findAccessibilityNodeInfosByViewId("${app.pkg}:id/$id")
+        if (direct.isNotEmpty()) return direct
+        val found = ArrayList<AccessibilityNodeInfo>()
+        walk(root) { node ->
+            val name = node.viewIdResourceName ?: return@walk
+            if (name == id || name.endsWith("/$id")) found.add(node)
+        }
+        return found
+    }
+
     /** The app's own reel page (found by view id) covering most of the screen. */
     private fun pageById(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): AccessibilityNodeInfo? {
         if (app.pageIds.isEmpty()) return null
@@ -117,7 +140,7 @@ object ReelDetector {
         var best: AccessibilityNodeInfo? = null
         var bestArea = 0L
         for (id in app.pageIds) {
-            for (node in root.findAccessibilityNodeInfosByViewId("${app.pkg}:id/$id")) {
+            for (node in findById(root, app, id)) {
                 node.getBoundsInScreen(r)
                 if (!r.intersect(screen)) continue
                 val area = r.width().toLong() * r.height()
@@ -128,8 +151,9 @@ object ReelDetector {
     }
 
     /** The pager page covering most of the screen, or null if the screen has no full-screen pager. */
-    private fun currentPage(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
-        val pager = findFullScreenScroller(root, screen) ?: return null
+    private fun currentPage(root: AccessibilityNodeInfo, app: TargetApp, screen: Rect): AccessibilityNodeInfo? {
+        val named = app.listIds.firstNotNullOfOrNull { id -> findById(root, app, id).firstOrNull { it.isVisibleToUser } }
+        val pager = named ?: findFullScreenScroller(root, screen) ?: return null
         val r = Rect()
         val screenArea = screen.width().toLong() * screen.height()
         var best: AccessibilityNodeInfo? = null
@@ -153,11 +177,16 @@ object ReelDetector {
         return visible.width().toLong() * visible.height() * 10 >= area * 6
     }
 
+    /**
+     * The innermost full-screen scrolling list. Apps nest lists: Facebook's outer pager only switches
+     * bottom tabs, and the reels list sits inside it. The walk goes level by level, so the last match is
+     * the deepest one.
+     */
     private fun findFullScreenScroller(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
         val r = Rect()
         var result: AccessibilityNodeInfo? = null
         walk(root) { node ->
-            if (result != null || !node.isScrollable || !node.isVisibleToUser) return@walk
+            if (!node.isScrollable || !node.isVisibleToUser) return@walk
             val cls = node.className?.toString() ?: return@walk
             if (!cls.contains("ViewPager") && !cls.contains("RecyclerView")) return@walk
             node.getBoundsInScreen(r)
