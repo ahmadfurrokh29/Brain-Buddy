@@ -3,6 +3,7 @@ package com.brainbuddy.brain_buddy.core
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -72,6 +73,48 @@ class Config(context: Context) {
     private fun weekKey(now: Long = System.currentTimeMillis()): String {
         val c = Calendar.getInstance().apply { timeInMillis = now }
         return "${c.get(Calendar.YEAR)}-w${c.get(Calendar.WEEK_OF_YEAR)}"
+    }
+
+    // ---------------------------------------------------------------- per-app budgets
+
+    /** Optional limits for single apps, e.g. {"com.instagram.android": 20}. Stored as JSON. */
+    val appBudgetsJson get() = prefs.getString("appBudgets", "{}") ?: "{}"
+
+    fun appBudget(pkg: String): Int? {
+        val o = try { JSONObject(appBudgetsJson) } catch (_: Exception) { return null }
+        // TikTok has two package names; a budget set for either applies to both.
+        val name = TargetApps.name(pkg)
+        val key = o.keys().asSequence().firstOrNull { it == pkg || TargetApps.name(it) == name } ?: return null
+        return o.optInt(key).takeIf { it > 0 }
+    }
+
+    fun appExtraToday(pkg: String): Int = prefs.getInt("extra_${pkg}_" + today(), 0)
+    fun addAppExtraToday(pkg: String, n: Int) = prefs.edit().putInt("extra_${pkg}_" + today(), appExtraToday(pkg) + n).apply()
+
+    fun appHardLockedUntil(pkg: String) = prefs.getLong("hardLockedUntil_$pkg", 0L)
+    fun setAppHardLockedUntil(pkg: String, until: Long) = prefs.edit().putLong("hardLockedUntil_$pkg", until).apply()
+
+    /** A Hard lock for one app, ending like a normal Hard lock. */
+    fun startAppHardLock(pkg: String, now: Long = System.currentTimeMillis()): Long {
+        val until = when (hardDuration) {
+            "1h" -> now + 60 * 60_000L
+            "3h" -> now + 3 * 60 * 60_000L
+            else -> nextDayStart(now)
+        }
+        setAppHardLockedUntil(pkg, until)
+        return until
+    }
+
+    /** Raising or removing an app's budget is loosening, so it's refused during a lock. */
+    private fun loosensAppBudgets(newJson: String): Boolean {
+        val old = try { JSONObject(appBudgetsJson) } catch (_: Exception) { JSONObject() }
+        val new = try { JSONObject(newJson) } catch (_: Exception) { return true }
+        for (key in old.keys()) {
+            val before = old.optInt(key)
+            val after = new.optInt(key, 0)
+            if (before > 0 && (after == 0 || after > before)) return true
+        }
+        return false
     }
 
     // ---------------------------------------------------------------- schedules
@@ -180,6 +223,7 @@ class Config(context: Context) {
         "emergencyLeft" to emergencyLeft(),
         "hardLockedUntil" to hardLockedUntil,
         "schedules" to schedulesJson,
+        "appBudgets" to appBudgetsJson,
         "activeSchedule" to (activeSchedule()?.let { mapOf("id" to it.id, "name" to it.name, "until" to it.until) } ?: emptyMap<String, Any>()),
     )
 
@@ -197,6 +241,7 @@ class Config(context: Context) {
                     "lockMode" -> if (v != "hard") continue
                     "hardDuration", "pausedUntil" -> continue
                     "emergencyPerWeek" -> if ((v as Number).toInt() > emergencyPerWeek) continue
+                    "appBudgets" -> if (loosensAppBudgets(v as String)) continue
                 }
             }
             when (k) {
@@ -204,6 +249,7 @@ class Config(context: Context) {
                 "budget", "dwellSec", "dayStartHour", "intentWaitSec", "emergencyPerWeek" -> e.putInt(k as String, (v as Number).toInt())
                 "lockMode", "hardDuration" -> e.putString(k as String, v as String)
                 "schedules" -> if (keepsActiveSchedule(v as String)) e.putString("schedules", v)
+                "appBudgets" -> e.putString("appBudgets", v as String)
                 "showSkimmed", "ignoreAds", "floatingCounter", "intentPause", "warn50", "warn80", "warn100" ->
                     e.putBoolean(k as String, v as Boolean)
                 "pausedUntil" -> e.putLong("pausedUntil", (v as Number).toLong())

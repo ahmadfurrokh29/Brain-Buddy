@@ -27,6 +27,8 @@ class ConfigNotifier extends AsyncNotifier<AppConfig> {
   Future<void> setSchedules(List<Schedule> schedules) =>
       set({'schedules': jsonEncode(schedules.map((s) => s.toJson()).toList())});
 
+  Future<void> setAppBudgets(Map<String, int> budgets) => set({'appBudgets': jsonEncode(budgets)});
+
   Future<void> pause(int minutes) async {
     state = AsyncData(await ref.read(bridgeProvider).pause(minutes));
   }

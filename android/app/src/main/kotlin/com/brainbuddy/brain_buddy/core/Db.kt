@@ -74,6 +74,16 @@ class Db private constructor(context: Context) :
             if (it.moveToFirst()) it.getInt(0) else 0
         }
 
+    /** Reels watched today in one app (both TikTok package names count as one app). */
+    fun watchedCount(day: String, pkgs: Collection<String>): Int {
+        if (pkgs.isEmpty()) return 0
+        val marks = pkgs.joinToString(",") { "?" }
+        return readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM events WHERE day = ? AND kind = 'watched' AND pkg IN ($marks)",
+            arrayOf(day, *pkgs.toTypedArray()),
+        ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }
+
     /** Keys of reels already counted today, so the same reel never counts twice. */
     fun countedKeys(day: String): Set<String> {
         val out = HashSet<String>()

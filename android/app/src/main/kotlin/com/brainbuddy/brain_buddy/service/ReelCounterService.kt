@@ -401,7 +401,7 @@ class ReelCounterService : AccessibilityService() {
         }
         val watched = db.watchedCount(day)
         val allowance = config.allowanceToday()
-        if (watched < allowance) return false
+        if (watched < allowance) return enforceAppLimit(now)
         overlays.hideIntent()
         when (config.lockMode) {
             "firm" -> overlays.showFirmLock(
@@ -421,6 +421,70 @@ class ReelCounterService : AccessibilityService() {
             )
         }
         return true
+    }
+
+    /** The app's own budget (e.g. Instagram 20), using the same lock style but only for that app. */
+    private fun enforceAppLimit(now: Long): Boolean {
+        val pkg = reelsPkg ?: return false
+        val name = TargetApps.name(pkg)
+        val until = config.appHardLockedUntil(pkg)
+        if (until in 1..now) {
+            config.setAppHardLockedUntil(pkg, 0)
+            if (config.today(until - 1) == config.today(now)) config.addAppExtraToday(pkg, 5)
+        }
+        if (now < config.appHardLockedUntil(pkg)) {
+            showAppHardLock(pkg, name)
+            return true
+        }
+        val limit = config.appBudget(pkg) ?: return false
+        val samePkgs = TargetApps.all.filter { it.name == name }.map { it.pkg }
+        val appWatched = db.watchedCount(day, samePkgs)
+        val appAllowance = limit + config.appExtraToday(pkg)
+        if (appWatched < appAllowance) return false
+        overlays.hideIntent()
+        when (config.lockMode) {
+            "firm" -> overlays.showFirmLock(
+                appWatched, appAllowance, FIRM_WAIT_SEC, appName = name,
+                onClose = { safe("lockClose") { goHome() } },
+                onUnlock = { reason -> safe("appFirm") { allowMoreInApp(pkg, 5, "app_firm", reason) } },
+            )
+            "hard" -> {
+                config.startAppHardLock(pkg, now)
+                db.insertUnlock(day, "app_hard_start", name)
+                showAppHardLock(pkg, name)
+            }
+            else -> overlays.showGentleLock(
+                appWatched, appAllowance, appName = name,
+                onClose = { safe("lockClose") { goHome() } },
+                onMore = { safe("appGentle") { allowMoreInApp(pkg, 5, "app_gentle_plus5") } },
+            )
+        }
+        return true
+    }
+
+    private fun showAppHardLock(pkg: String, name: String) {
+        val until = config.appHardLockedUntil(pkg)
+        val time = DateFormat.getTimeFormat(this).format(Date(until))
+        val whenText = if (config.today(until - 1) == config.today()) "until $time" else "until $time tomorrow"
+        overlays.showHardLock(
+            "$name reels are locked",
+            "You reached your $name limit. Its reels open again $whenText. Other apps, messages and stories still work.",
+            config.emergencyLeft(),
+            onClose = { safe("lockClose") { goHome() } },
+            onEmergency = {
+                safe("appEmergency") {
+                    config.useEmergency()
+                    config.setAppHardLockedUntil(pkg, 0)
+                    allowMoreInApp(pkg, EMERGENCY_REELS, "app_emergency")
+                }
+            },
+        )
+    }
+
+    private fun allowMoreInApp(pkg: String, reels: Int, kind: String, reason: String? = null) {
+        config.addAppExtraToday(pkg, reels)
+        db.insertUnlock(day, kind, reason ?: TargetApps.name(pkg))
+        CountBus.emit()
     }
 
     private fun showHardLock() {

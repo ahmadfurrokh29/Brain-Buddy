@@ -5,6 +5,7 @@ import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import 'app_budgets.dart';
 import 'schedules.dart';
 
 class LimitsScreen extends ConsumerWidget {
@@ -101,6 +102,7 @@ class _LimitsBody extends ConsumerWidget {
           child: c.lockMode == 'hard' ? _HardOptions(c: c, locked: locked) : null,
         ),
         SchedulesSection(c: c),
+        AppBudgetsSection(c: c),
         const SectionTitle('Before you scroll'),
         BBCard(
           padding: EdgeInsets.zero,

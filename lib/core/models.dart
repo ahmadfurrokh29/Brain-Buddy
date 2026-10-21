@@ -66,12 +66,16 @@ class AppConfig {
   final int hardLockedUntil;
   final List<Schedule> schedules;
 
+  /// Optional daily limits for single apps, by package name.
+  final Map<String, int> appBudgets;
+
   /// The schedule blocking reels right now, if any.
   final String? activeScheduleId;
   final int activeScheduleUntil;
 
   const AppConfig({
     required this.schedules,
+    required this.appBudgets,
     required this.activeScheduleId,
     required this.activeScheduleUntil,
     required this.lockMode,
@@ -97,6 +101,7 @@ class AppConfig {
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
         schedules: ((jsonDecode(m['schedules'] as String? ?? '[]') as List).cast<Map<String, dynamic>>()).map(Schedule.fromJson).toList(),
+        appBudgets: (jsonDecode(m['appBudgets'] as String? ?? '{}') as Map).map((k, v) => MapEntry(k as String, _int(v))),
         activeScheduleId: (m['activeSchedule'] as Map?)?['id'] as String?,
         activeScheduleUntil: _int((m['activeSchedule'] as Map?)?['until']),
         lockMode: m['lockMode'] as String? ?? 'gentle',

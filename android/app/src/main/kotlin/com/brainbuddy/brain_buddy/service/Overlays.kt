@@ -149,11 +149,9 @@ class Overlays(private val ctx: Context) {
     // ---------------------------------------------------------------- lock screen (Gentle)
 
     /** Gentle lock: a breathing break, then "Close app" or "5 more reels". */
-    fun showGentleLock(watched: Int, budget: Int, onClose: () -> Unit, onMore: () -> Unit) {
+    fun showGentleLock(watched: Int, budget: Int, appName: String? = null, onClose: () -> Unit, onMore: () -> Unit) {
         if (lock != null) return
-        val (root, actions) = lockScreen(
-            Mood.MELTED, "Time for a brain break", "You've watched $watched reels today. Your goal was $budget.", breathing = true,
-        )
+        val (root, actions) = lockScreen(Mood.MELTED, "Time for a brain break", limitMessage(watched, budget, appName), breathing = true)
         actions.addView(button("Close app", primary = true) { hideLock(); onClose() })
         actions.addView(button("5 more reels", primary = false) { hideLock(); onMore() }.withTop(8))
         if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
@@ -163,11 +161,9 @@ class Overlays(private val ctx: Context) {
     }
 
     /** Firm lock: wait [waitSec] seconds, then type why you want more reels to unlock 5. */
-    fun showFirmLock(watched: Int, budget: Int, waitSec: Int, onClose: () -> Unit, onUnlock: (String) -> Unit) {
+    fun showFirmLock(watched: Int, budget: Int, waitSec: Int, appName: String? = null, onClose: () -> Unit, onUnlock: (String) -> Unit) {
         if (lock != null) return
-        val (root, actions) = lockScreen(
-            Mood.MELTED, "Reel limit reached", "You've watched $watched of $budget reels today.", breathing = true,
-        )
+        val (root, actions) = lockScreen(Mood.MELTED, "Reel limit reached", limitMessage(watched, budget, appName), breathing = true)
         val countdown = text("", 15f, color = GREY)
         val reason = EditText(ctx).apply {
             hint = "Why do you want more reels?"
@@ -299,6 +295,10 @@ class Overlays(private val ctx: Context) {
             start()
         }
     }
+
+    private fun limitMessage(watched: Int, budget: Int, appName: String?) =
+        if (appName == null) "You've watched $watched reels today. Your goal was $budget."
+        else "You've watched $watched reels on $appName today. Your $appName limit was $budget."
 
     private fun revealLater(view: View, delayMs: Long) {
         main.postDelayed({ view.visibility = View.VISIBLE; view.alpha = 0f; view.animate().alpha(1f).start() }, delayMs)
