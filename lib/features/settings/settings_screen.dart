@@ -119,6 +119,16 @@ class _SettingsBody extends ConsumerWidget {
             ),
           ),
         ]),
+        const SectionTitle('Subscription'),
+        _Group(children: [
+          ListTile(
+            leading: const Icon(Icons.workspace_premium_rounded, color: Color(0xFFE0A800)),
+            title: const Text('Brain Buddy Pro'),
+            subtitle: Text(kBetaAllPro ? 'All Pro features are free during the beta' : 'Locks, schedules, insights and more'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/pro'),
+          ),
+        ]),
         const SectionTitle('Privacy & data'),
         _Group(children: [
           ListTile(
@@ -136,6 +146,13 @@ class _SettingsBody extends ConsumerWidget {
             leading: const Icon(Icons.upload_file_rounded),
             title: const Text('Back up to file'),
             onTap: () => _backup(context, ref),
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_view_rounded),
+            title: const Text('Export to spreadsheet (CSV)'),
+            subtitle: const Text('Every counted reel: day, time, app'),
+            trailing: const ProTag(),
+            onTap: () => _exportCsv(context, ref),
           ),
           ListTile(
             leading: const Icon(Icons.download_rounded),
@@ -210,6 +227,18 @@ class _SettingsBody extends ConsumerWidget {
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], title: 'Brain Buddy backup'));
     } catch (e) {
       if (context.mounted) showSnack(context, 'Backup failed: $e');
+    }
+  }
+
+  Future<void> _exportCsv(BuildContext context, WidgetRef ref) async {
+    try {
+      final csv = await ref.read(bridgeProvider).exportCsv();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/brain_buddy_reels_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv');
+      await file.writeAsString(csv);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'text/csv')], title: 'Brain Buddy reels'));
+    } catch (e) {
+      if (context.mounted) showSnack(context, 'Export failed: $e');
     }
   }
 

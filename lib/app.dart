@@ -11,6 +11,7 @@ import 'features/onboarding/permissions_screen.dart';
 import 'features/onboarding/setup_apps_screen.dart';
 import 'features/onboarding/splash_screen.dart';
 import 'features/onboarding/welcome_screen.dart';
+import 'features/pro/paywall_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/main_shell.dart';
 import 'theme/app_theme.dart';
@@ -23,6 +24,7 @@ final _router = GoRouter(
     GoRoute(path: '/setup/apps', builder: (_, _) => const SetupAppsScreen()),
     GoRoute(path: '/setup/permissions', builder: (_, _) => const PermissionsScreen()),
     GoRoute(path: '/doctor', builder: (_, _) => const DoctorScreen()),
+    GoRoute(path: '/pro', builder: (_, _) => const PaywallScreen()),
     StatefulShellRoute.indexedStack(
       builder: (_, _, shell) => MainShell(shell: shell),
       branches: [

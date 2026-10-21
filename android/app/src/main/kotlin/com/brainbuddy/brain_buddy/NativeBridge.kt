@@ -109,6 +109,7 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             config.toMap()
         }
         "exportBackup" -> db.exportJson(config.toMap())
+        "exportCsv" -> db.exportCsv()
         "importBackup" -> {
             val restoredConfig = db.importJson(call.argument<String>("json")!!)
             config.apply(restoredConfig)

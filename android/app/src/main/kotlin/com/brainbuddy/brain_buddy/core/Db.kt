@@ -169,6 +169,21 @@ class Db private constructor(context: Context) :
         return mapOf("heat" to heat.toList(), "firstReel" to firstReel.values.toList(), "intents" to intents, "firmReasons" to firmReasons)
     }
 
+    /** Every counted reel as a spreadsheet: day, time, app, watched/skimmed/ad. Opens in Excel or Google Sheets. */
+    fun exportCsv(): String {
+        val out = StringBuilder("day,time,app,result\n")
+        val cal = Calendar.getInstance()
+        readableDatabase.rawQuery("SELECT day, ts, pkg, kind FROM events ORDER BY ts", null).use {
+            while (it.moveToNext()) {
+                cal.timeInMillis = it.getLong(1)
+                val time = "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                out.append(it.getString(0)).append(',').append(time).append(',')
+                    .append(TargetApps.name(it.getString(2))).append(',').append(it.getString(3)).append('\n')
+            }
+        }
+        return out.toString()
+    }
+
     fun exportJson(config: Map<String, Any>): String {
         val root = JSONObject()
         root.put("format", "brain_buddy_backup")

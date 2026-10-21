@@ -50,6 +50,8 @@ class NativeBridge {
 
   Future<void> requestActivityRecognition() => _method.invokeMethod('requestActivityRecognition');
 
+  Future<String> exportCsv() async => (await _method.invokeMethod<String>('exportCsv'))!;
+
   Future<String> exportBackup() async => (await _method.invokeMethod<String>('exportBackup'))!;
   Future<void> importBackup(String json) => _method.invokeMethod('importBackup', {'json': json});
   Future<void> deleteAllData() => _method.invokeMethod('deleteAllData');
