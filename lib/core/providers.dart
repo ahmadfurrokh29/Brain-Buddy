@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -48,7 +49,9 @@ final statusProvider = FutureProvider<DeviceStatus>((ref) {
   return ref.watch(bridgeProvider).getStatus();
 });
 
-final targetsProvider = FutureProvider<List<TargetApp>>((ref) => ref.watch(bridgeProvider).getTargets());
+final appIconsProvider = FutureProvider<Map<String, Uint8List>>((ref) => ref.watch(bridgeProvider).getAppIcons());
+
+final targetsProvider =FutureProvider<List<TargetApp>>((ref) => ref.watch(bridgeProvider).getTargets());
 
 /// Days in a row (ending today) at or under the daily budget.
 final streakProvider = FutureProvider<int>((ref) async {

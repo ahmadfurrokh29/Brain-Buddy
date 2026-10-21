@@ -38,7 +38,7 @@ class _SetupAppsScreenState extends ConsumerState<SetupAppsScreen> {
             children: [
               Text('Which apps do you scroll?', style: t.headlineSmall),
               const SizedBox(height: 4),
-              Text('Brain Buddy only looks at the apps you pick.', style: t.bodyMedium?.copyWith(color: BB.grey)),
+              Text('Brain Buddy only looks at the apps you pick.', style: t.bodyMedium?.copyWith(color: context.muted)),
               const SizedBox(height: 16),
               BBCard(
                 padding: EdgeInsets.zero,
@@ -60,8 +60,8 @@ class _SetupAppsScreenState extends ConsumerState<SetupAppsScreen> {
                   Slider(
                     value: _budget,
                     min: 10,
-                    max: 200,
-                    divisions: 38,
+                    max: 500,
+                    divisions: 98,
                     activeColor: BB.mint,
                     label: '${_budget.round()}',
                     onChanged: (v) => setState(() => _budget = v),
@@ -111,18 +111,19 @@ class _AppTile extends StatelessWidget {
     return SwitchListTile(
       value: selected,
       onChanged: onChanged,
-      secondary: AppBadge(name: app.name),
+      secondary: AppBadge(name: app.name, pkg: app.pkg),
       title: Text(app.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(app.installed ? 'Installed' : 'Not installed', style: const TextStyle(color: BB.grey)),
+      subtitle: Text(app.installed ? 'Installed' : 'Not installed', style: TextStyle(color: context.muted)),
     );
   }
 }
 
-/// Coloured circle with the app's initial (we don't ship other companies' logos).
-class AppBadge extends StatelessWidget {
+/// The app's real icon from the phone, or a coloured square with its initial when it isn't installed.
+class AppBadge extends ConsumerWidget {
   final String name;
+  final String? pkg;
   final double size;
-  const AppBadge({super.key, required this.name, this.size = 40});
+  const AppBadge({super.key, required this.name, this.pkg, this.size = 40});
 
   static const _colors = {
     'Instagram': Color(0xFFE1306C),
@@ -136,7 +137,14 @@ class AppBadge extends StatelessWidget {
   };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final icon = pkg == null ? null : ref.watch(appIconsProvider).value?[pkg];
+    if (icon != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.24),
+        child: Image.memory(icon, width: size, height: size, gaplessPlayback: true),
+      );
+    }
     final color = _colors[name] ?? BB.mint;
     return Container(
       width: size,

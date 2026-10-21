@@ -18,6 +18,12 @@ class NativeBridge {
   Future<List<TargetApp>> getTargets() async =>
       (await _method.invokeMethod<List>('getTargets'))!.map((e) => TargetApp.fromMap(e as Map)).toList();
 
+  /// Launcher icons of installed reel apps (PNG bytes), keyed by package name.
+  Future<Map<String, Uint8List>> getAppIcons() async {
+    final raw = await _method.invokeMethod<Map>('getAppIcons') ?? const {};
+    return raw.map((k, v) => MapEntry(k as String, v as Uint8List));
+  }
+
   Future<DeviceStatus> getStatus() async => DeviceStatus.fromMap((await _method.invokeMethod<Map>('getStatus'))!);
 
   Future<DaySummary> getDay([String? day]) async =>

@@ -75,7 +75,7 @@ class _Slide extends StatelessWidget {
         const SizedBox(height: 36),
         Text(title, style: t.headlineMedium, textAlign: TextAlign.center).animate().fadeIn().slideY(begin: 0.2),
         const SizedBox(height: 12),
-        Text(body, style: t.bodyLarge?.copyWith(color: BB.grey), textAlign: TextAlign.center).animate().fadeIn(delay: 150.ms),
+        Text(body, style: t.bodyLarge?.copyWith(color: context.muted), textAlign: TextAlign.center).animate().fadeIn(delay: 150.ms),
       ]),
     );
   }
@@ -90,7 +90,7 @@ class _SlideCounter extends StatelessWidget {
       art: BBCard(
         padding: const EdgeInsets.all(24),
         child: Column(children: [
-          Text('REELS TODAY', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: BB.grey, letterSpacing: 1.2)),
+          Text('REELS TODAY', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: context.muted, letterSpacing: 1.2)),
           TweenAnimationBuilder<int>(
             tween: IntTween(begin: 0, end: 142),
             duration: const Duration(milliseconds: 1600),
@@ -145,7 +145,7 @@ class _SlidePrivate extends StatelessWidget {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                  Text(body, style: const TextStyle(color: BB.grey)),
+                  Text(body, style: TextStyle(color: context.muted)),
                 ]),
               ),
             ]),

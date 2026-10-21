@@ -8,6 +8,8 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -24,6 +26,7 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 
 /** The bridge between the Flutter screens and the native counting engine. */
 class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
@@ -65,6 +68,7 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             val installed = pkgs.firstOrNull { isInstalled(it) }
             mapOf("pkg" to (installed ?: app.pkg), "pkgs" to pkgs, "name" to app.name, "installed" to (installed != null))
         }
+        "getAppIcons" -> appIcons()
         "getStatus" -> status()
         "getDay" -> db.daySummary(call.argument<String>("day") ?: config.today())
         "getDays" -> {
@@ -156,6 +160,30 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
     /** "Restrict background activity" (Samsung: "Put app to sleep") stops the counter even if battery optimisation is off. */
     private fun isBackgroundRestricted(): Boolean =
         Build.VERSION.SDK_INT >= 28 && activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted
+
+    /**
+     * The real launcher icons of installed reel apps, as PNG bytes. Taken from the phone, so Brain Buddy
+     * doesn't ship other companies' logos and the icons always match the installed version.
+     */
+    private fun appIcons(): Map<String, ByteArray> {
+        val out = HashMap<String, ByteArray>()
+        val size = (48 * activity.resources.displayMetrics.density).toInt()
+        for (app in TargetApps.all) {
+            val drawable = try {
+                activity.packageManager.getApplicationIcon(app.pkg)
+            } catch (_: PackageManager.NameNotFoundException) {
+                continue
+            }
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            val bytes = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+            out[app.pkg] = bytes.toByteArray()
+        }
+        return out
+    }
 
     private fun isInstalled(pkg: String): Boolean = try {
         activity.packageManager.getPackageInfo(pkg, 0); true

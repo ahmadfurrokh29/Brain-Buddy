@@ -56,9 +56,9 @@ class HomeScreen extends ConsumerWidget {
                       duration: const Duration(milliseconds: 700),
                       builder: (context, v, _) => Text('$v', style: t.displayMedium?.copyWith(color: mood == Mood.melted ? BB.coral : null)),
                     ),
-                    Text(' / $allowance', style: t.titleLarge?.copyWith(color: BB.grey)),
+                    Text(' / $allowance', style: t.titleLarge?.copyWith(color: context.muted)),
                   ]),
-                  Text('reels today', style: t.bodyMedium?.copyWith(color: BB.grey)),
+                  Text('reels today', style: t.bodyMedium?.copyWith(color: context.muted)),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -69,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(mood.message, style: t.bodySmall?.copyWith(color: BB.grey)),
+                  Text(mood.message, style: t.bodySmall?.copyWith(color: context.muted)),
                 ]),
               ),
               const SizedBox(height: 12),
@@ -211,10 +211,10 @@ class _AppChip extends StatelessWidget {
       child: BBCard(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
-          AppBadge(name: stat.name, size: 32),
+          AppBadge(name: stat.name, pkg: stat.pkg, size: 36),
           const SizedBox(height: 6),
           Text('${stat.watched} reels', style: const TextStyle(fontWeight: FontWeight.w800)),
-          Text(formatMinutes((stat.ms / 60000).round()), style: const TextStyle(color: BB.grey, fontSize: 12)),
+          Text(formatMinutes((stat.ms / 60000).round()), style: TextStyle(color: context.muted, fontSize: 12)),
         ]),
       ),
     );
@@ -257,10 +257,10 @@ Future<void> showPauseSheet(BuildContext context, WidgetRef ref) async {
     showDragHandle: true,
     builder: (context) => SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
           child: Text('Pause counting for a while — handy when a banking app asks you to turn off accessibility apps.',
-              textAlign: TextAlign.center, style: TextStyle(color: BB.grey)),
+              textAlign: TextAlign.center, style: TextStyle(color: context.muted)),
         ),
         for (final e in options.entries)
           ListTile(leading: const Icon(Icons.pause_circle_outline_rounded), title: Text(e.key), onTap: () => Navigator.pop(context, e.value)),

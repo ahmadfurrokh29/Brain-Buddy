@@ -70,7 +70,7 @@ class StatTile extends StatelessWidget {
           CircleAvatar(radius: 16, backgroundColor: color.withValues(alpha: 0.15), child: Icon(icon, size: 18, color: color)),
           const SizedBox(height: 8),
           Text(value, style: t.titleLarge),
-          Text(label, style: t.bodySmall?.copyWith(color: BB.grey), textAlign: TextAlign.center),
+          Text(label, style: t.bodySmall?.copyWith(color: context.muted), textAlign: TextAlign.center),
         ]),
       ),
     );

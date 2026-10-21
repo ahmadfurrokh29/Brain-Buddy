@@ -63,7 +63,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
         children: [
           Text('Let Brain Buddy count', style: t.headlineSmall),
           const SizedBox(height: 4),
-          Text('Android needs your OK for a few things. We explain each one.', style: t.bodyMedium?.copyWith(color: BB.grey)),
+          Text('Android needs your OK for a few things. We explain each one.', style: t.bodyMedium?.copyWith(color: context.muted)),
           const SizedBox(height: 16),
           _PermissionCard(
             icon: Icons.accessibility_new_rounded,
@@ -100,10 +100,10 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
             },
           ),
           const SizedBox(height: 8),
-          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.lock_rounded, size: 16, color: BB.grey),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.lock_rounded, size: 16, color: context.muted),
             SizedBox(width: 6),
-            Text('Everything stays on your phone.', style: TextStyle(color: BB.grey)),
+            Text('Everything stays on your phone.', style: TextStyle(color: context.muted)),
           ]),
         ],
       ),
@@ -154,13 +154,13 @@ class _PermissionCard extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                Text(tag, style: TextStyle(color: tag == 'Required' ? BB.coral : BB.grey, fontSize: 12, fontWeight: FontWeight.w700)),
+                Text(tag, style: TextStyle(color: tag == 'Required' ? BB.coral : context.muted, fontSize: 12, fontWeight: FontWeight.w700)),
               ]),
             ),
             if (done) const Icon(Icons.check_circle_rounded, color: BB.mint, size: 28),
           ]),
           const SizedBox(height: 10),
-          Text(body, style: const TextStyle(color: BB.grey)),
+          Text(body, style: TextStyle(color: context.muted)),
           if (!done) ...[
             const SizedBox(height: 12),
             Align(
@@ -202,7 +202,7 @@ class _AccessibilityDisclosure extends StatelessWidget {
           point(Icons.cancel_rounded, BB.coral, 'Nothing is uploaded. Your counts stay on this phone.'),
           const SizedBox(height: 8),
           Text('On the next screen tap "Brain Buddy reel counter" (it may be under "Installed apps" or "Downloaded apps") and switch it on.',
-              style: t.bodySmall?.copyWith(color: BB.grey)),
+              style: t.bodySmall?.copyWith(color: context.muted)),
           const SizedBox(height: 16),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('I agree — open settings')),
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Center(child: Text('Not now'))),

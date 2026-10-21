@@ -183,18 +183,25 @@ class TargetApp {
       );
 }
 
-/// Brain Buddy's mood. Same thresholds as the native side (Mood.kt).
+/// Brain Buddy's mood. Same thresholds and brain colours as the native side (Mood.kt).
+///
+/// [color] is the mood's accent (glow, pill). [brain], [brainTop] and [brainOutline] colour the brain
+/// itself: healthy pink when fresh, fading through salmon, dull yellow and burnt orange to a drained
+/// grey-purple when melted.
 enum Mood {
-  fresh('Fresh', 'Feeling sharp and happy!', BB.mint),
-  okay('Okay', 'Doing fine. Keep it chill.', Color(0xFF8BD17C)),
-  tired('Tired', 'Getting a bit sleepy…', BB.sun),
-  fried('Fried', 'Dizzy! Time to slow down.', Color(0xFFFF9F59)),
-  melted('Melted', 'Brain is melting. Break time!', BB.coral);
+  fresh('Fresh', 'Feeling sharp and happy!', BB.mint, Color(0xFFFF9EC0), Color(0xFFFFC4D9), Color(0xFFE0608F)),
+  okay('Okay', 'Doing fine. Keep it chill.', Color(0xFF8BD17C), Color(0xFFFFB09A), Color(0xFFFFD0C2), Color(0xFFE07A5F)),
+  tired('Tired', 'Getting a bit sleepy…', BB.sun, Color(0xFFF2C580), Color(0xFFF9DDB0), Color(0xFFC9963F)),
+  fried('Fried', 'Dizzy! Time to slow down.', Color(0xFFFF9F59), Color(0xFFF58F5B), Color(0xFFFFB892), Color(0xFFC9612F)),
+  melted('Melted', 'Brain is melting. Break time!', BB.coral, Color(0xFFA99ACB), Color(0xFFC9BEE3), Color(0xFF7A6AA6));
 
   final String label;
   final String message;
   final Color color;
-  const Mood(this.label, this.message, this.color);
+  final Color brain;
+  final Color brainTop;
+  final Color brainOutline;
+  const Mood(this.label, this.message, this.color, this.brain, this.brainTop, this.brainOutline);
 
   static Mood of(int watched, int budget) {
     if (budget <= 0) return Mood.melted;

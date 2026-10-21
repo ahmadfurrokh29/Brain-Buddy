@@ -58,7 +58,7 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(s.healthy ? 'All good!' : 'Counting needs a fix',
                             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: BB.ink)),
-                        Text('Phone: ${brand.name} ${s.model}', style: const TextStyle(color: BB.grey)),
+                        Text('Phone: ${brand.name} ${s.model}', style: TextStyle(color: context.muted)),
                       ]),
                     ),
                   ]),
@@ -125,7 +125,7 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                   BBCard(
                     child: SelectableText(
                       'The counter hit a problem and kept running. If counting seems wrong, send this to support:\n\n${s.lastError}',
-                      style: const TextStyle(color: BB.grey),
+                      style: TextStyle(color: context.muted),
                     ),
                   ),
                 ],
@@ -147,7 +147,7 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('1. Open YouTube Shorts or Instagram Reels.\n2. Watch one reel for 5 seconds, then swipe to the next.\n3. Come back here and pull down to refresh.'),
                     const SizedBox(height: 8),
-                    Text('If "Last reel activity" shows the time you just scrolled, counting works. 🎉', style: TextStyle(color: BB.grey.withValues(alpha: 0.9))),
+                    Text('If "Last reel activity" shows the time you just scrolled, counting works. 🎉', style: TextStyle(color: context.muted.withValues(alpha: 0.9))),
                   ]),
                 ),
               ],

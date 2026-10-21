@@ -122,15 +122,15 @@ class _BrainPainter extends CustomPainter {
     canvas.drawPath(
       body,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFB8C9), BB.brainPink],
+          colors: [mood.brainTop, mood.brain],
         ).createShader(Rect.fromLTWH(0, 0, s, s)),
     );
     if (melted) _drips(canvas, s);
     canvas.drawPath(body, Paint()
-      ..color = BB.brainPinkDark
+      ..color = mood.brainOutline
       ..style = PaintingStyle.stroke
       ..strokeWidth = s * 0.018);
 
@@ -149,7 +149,7 @@ class _BrainPainter extends CustomPainter {
   }
 
   void _drips(Canvas canvas, double s) {
-    final paint = Paint()..color = BB.brainPink;
+    final paint = Paint()..color = mood.brain;
     for (final d in const [
       [0.34, 0.78, 0.05, 0.10],
       [0.55, 0.80, 0.04, 0.14],
@@ -163,7 +163,7 @@ class _BrainPainter extends CustomPainter {
 
   void _folds(Canvas canvas, double s) {
     final fold = Paint()
-      ..color = BB.brainPinkDark.withValues(alpha: 0.55)
+      ..color = mood.brainOutline.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeWidth = s * 0.014;

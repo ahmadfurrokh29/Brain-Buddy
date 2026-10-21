@@ -182,7 +182,7 @@ class _SettingsBody extends ConsumerWidget {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (final a in targets)
               SwitchListTile(
-                secondary: AppBadge(name: a.name, size: 32),
+                secondary: AppBadge(name: a.name, pkg: a.pkg, size: 32),
                 title: Text(a.name),
                 subtitle: Text(a.installed ? 'Installed' : 'Not installed'),
                 value: selected.contains(a.name),
@@ -254,7 +254,7 @@ class _SettingsBody extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => const SafeArea(
+      builder: (context) => SafeArea(
         child: Padding(
           padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -271,7 +271,7 @@ class _SettingsBody extends ConsumerWidget {
             Text('• Screenshots or the content of reels'),
             Text('• Anything from apps you did not pick'),
             SizedBox(height: 12),
-            Text('All of it stays on this phone. Nothing is uploaded.', style: TextStyle(color: BB.grey)),
+            Text('All of it stays on this phone. Nothing is uploaded.', style: TextStyle(color: context.muted)),
           ]),
         ),
       ),

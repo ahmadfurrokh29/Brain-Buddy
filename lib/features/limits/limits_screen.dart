@@ -36,18 +36,19 @@ class _LimitsBody extends ConsumerWidget {
       children: [
         BBCard(
           child: Column(children: [
-            Text('DAILY REEL BUDGET', style: t.labelLarge?.copyWith(color: BB.grey, letterSpacing: 1.2)),
+            Text('DAILY REEL BUDGET', style: t.labelLarge?.copyWith(color: context.muted, letterSpacing: 1.2)),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _RoundButton(icon: Icons.remove_rounded, onTap: c.budget > 10 ? () => cfg.set({'budget': c.budget - 5}) : null),
+              // Steps of 5 for small budgets, 10 for bigger ones, so reaching 500 doesn't take 100 taps.
+              _RoundButton(icon: Icons.remove_rounded, onTap: c.budget > 10 ? () => cfg.set({'budget': c.budget - (c.budget > 100 ? 10 : 5)}) : null),
               SizedBox(
                 width: 140,
                 child: Column(children: [
                   Text('${c.budget}', style: t.displayMedium),
-                  Text('reels a day', style: t.bodyMedium?.copyWith(color: BB.grey)),
+                  Text('reels a day', style: t.bodyMedium?.copyWith(color: context.muted)),
                 ]),
               ),
-              _RoundButton(icon: Icons.add_rounded, onTap: c.budget < 200 ? () => cfg.set({'budget': c.budget + 5}) : null),
+              _RoundButton(icon: Icons.add_rounded, onTap: c.budget < 500 ? () => cfg.set({'budget': (c.budget + (c.budget >= 100 ? 10 : 5)).clamp(10, 500)}) : null),
             ]),
             if (c.extraToday > 0) ...[
               const SizedBox(height: 8),
@@ -166,7 +167,7 @@ class _LockCard extends StatelessWidget {
                     ],
                   ]),
                   const SizedBox(height: 2),
-                  Text(body, style: const TextStyle(color: BB.grey)),
+                  Text(body, style: TextStyle(color: context.muted)),
                 ]),
               ),
               if (selected) const Icon(Icons.check_circle_rounded, color: BB.mint),

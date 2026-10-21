@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -30,7 +31,12 @@ class Overlays(private val ctx: Context) {
     private val wm = ctx.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
 
-    private var counter: TextView? = null
+    private var counter: LinearLayout? = null
+    private var counterBrain: BrainView? = null
+    private var counterText: TextView? = null
+    private var counterParams: WindowManager.LayoutParams? = null
+    private var lastWatched = -1
+    private val positions = ctx.getSharedPreferences("bb_overlay", Context.MODE_PRIVATE)
     private var lock: View? = null
     private var intent: View? = null
     private var breathing: ValueAnimator? = null
@@ -40,39 +46,101 @@ class Overlays(private val ctx: Context) {
 
     // ---------------------------------------------------------------- floating counter
 
+    /** Bubble with the animated brain and today's count. The user can drag it anywhere; the spot is remembered. */
     fun showCounter(watched: Int, budget: Int) {
         if (counter == null) {
-            val tv = TextView(ctx).apply {
+            val brain = BrainView(ctx).apply { deep = true }
+            val text = TextView(ctx).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 typeface = Typeface.DEFAULT_BOLD
-                setTextColor(Color.WHITE)
-                setPadding(dp(12), dp(6), dp(12), dp(6))
+                setTextColor(INK)
+            }
+            val bubble = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(4), dp(3), dp(12), dp(3))
                 elevation = dp(4).toFloat()
+                addView(brain, LinearLayout.LayoutParams(dp(38), dp(38)))
+                addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(2) })
             }
+            val metrics = ctx.resources.displayMetrics
             val lp = baseParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                gravity = Gravity.TOP or Gravity.END
-                x = dp(12); y = dp(96)
+                gravity = Gravity.TOP or Gravity.START
+                x = positions.getInt("x", metrics.widthPixels - dp(132))
+                y = positions.getInt("y", dp(96))
             }
-            if (!add(tv, lp)) return
-            counter = tv
+            enableDragging(bubble, lp)
+            if (!add(bubble, lp)) return
+            counter = bubble
+            counterBrain = brain
+            counterText = text
+            counterParams = lp
+            lastWatched = -1
         }
         updateCounter(watched, budget)
     }
 
     fun updateCounter(watched: Int, budget: Int) {
-        val tv = counter ?: return
-        val nearLimit = budget > 0 && watched >= budget * 0.8
-        tv.text = "${Mood.of(watched, budget).emoji} $watched/$budget"
-        tv.background = pill(if (nearLimit) CORAL else MINT)
-        tv.animate().scaleX(1.15f).scaleY(1.15f).setDuration(120).withEndAction {
-            tv.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
-        }.start()
+        val bubble = counter ?: return
+        val mood = Mood.of(watched, budget)
+        counterBrain?.mood = mood
+        counterText?.text = "$watched/$budget"
+        // A light, slightly see-through shade of the brain's colour, so the stronger-coloured brain stands
+        // out against it, with a border in the brain's darker outline colour.
+        bubble.background = GradientDrawable().apply {
+            cornerRadius = dp(28).toFloat()
+            setColor(towardWhite(mood.top, 0.75f, alpha = 235))
+            setStroke(dp(2), mood.outline)
+        }
+        if (lastWatched in 0 until watched) counterBrain?.poke()
+        lastWatched = watched
     }
 
     fun hideCounter() {
         counter?.let { remove(it) }
         counter = null
+        counterBrain = null
+        counterText = null
+        counterParams = null
+    }
+
+    /** Mixes [color] with white by [amount] (0 = unchanged, 1 = white). */
+    private fun towardWhite(color: Int, amount: Float, alpha: Int): Int {
+        fun mix(c: Int) = (c + (255 - c) * amount).toInt()
+        return Color.argb(alpha, mix(Color.red(color)), mix(Color.green(color)), mix(Color.blue(color)))
+    }
+
+    private fun enableDragging(view: View, lp: WindowManager.LayoutParams) {
+        var startX = 0; var startY = 0
+        var downX = 0f; var downY = 0f
+        var moved = false
+        view.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = lp.x; startY = lp.y
+                    downX = e.rawX; downY = e.rawY
+                    moved = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - downX; val dy = e.rawY - downY
+                    if (!moved && dx * dx + dy * dy > dp(6) * dp(6)) moved = true
+                    if (moved) {
+                        val metrics = ctx.resources.displayMetrics
+                        lp.x = (startX + dx).toInt().coerceIn(0, (metrics.widthPixels - v.width).coerceAtLeast(0))
+                        lp.y = (startY + dy).toInt().coerceIn(0, (metrics.heightPixels - v.height).coerceAtLeast(0))
+                        try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (moved) positions.edit().putInt("x", lp.x).putInt("y", lp.y).apply()
+                    else counterBrain?.poke() // a tap makes the brain wobble
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     // ---------------------------------------------------------------- lock screen (Gentle)

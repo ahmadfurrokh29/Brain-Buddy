@@ -82,7 +82,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                     Expanded(
                       child: Text.rich(TextSpan(children: [
                         TextSpan(text: formatMinutes(minutes), style: t.titleLarge),
-                        TextSpan(text: '  in ${shown.length} days • $skimmed skimmed', style: t.bodyMedium?.copyWith(color: BB.grey)),
+                        TextSpan(text: '  in ${shown.length} days • $skimmed skimmed', style: t.bodyMedium?.copyWith(color: context.muted)),
                       ])),
                     ),
                   ]),
@@ -152,7 +152,7 @@ class _DaysChart extends StatelessWidget {
                 final fmt = days.length > 10 ? 'd' : 'E';
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(DateFormat(fmt).format(days[i].date), style: const TextStyle(fontSize: 11, color: BB.grey)),
+                  child: Text(DateFormat(fmt).format(days[i].date), style: TextStyle(fontSize: 11, color: context.muted)),
                 );
               },
             ),
@@ -199,7 +199,7 @@ class _HourChart extends StatelessWidget {
                 if (h % 6 != 0) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(h == 0 ? '12am' : h == 12 ? '12pm' : h < 12 ? '${h}am' : '${h - 12}pm', style: const TextStyle(fontSize: 11, color: BB.grey)),
+                  child: Text(h == 0 ? '12am' : h == 12 ? '12pm' : h < 12 ? '${h}am' : '${h - 12}pm', style: TextStyle(fontSize: 11, color: context.muted)),
                 );
               },
             ),
@@ -223,14 +223,16 @@ class _AppsBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final byApp = <String, (int, int)>{};
+    final pkgOf = <String, String>{};
     for (final d in days) {
       for (final a in d.apps) {
         final prev = byApp[a.name] ?? (0, 0);
         byApp[a.name] = (prev.$1 + a.watched, prev.$2 + a.ms);
+        pkgOf[a.name] = a.pkg;
       }
     }
     if (byApp.isEmpty) {
-      return const BBCard(child: Text('Nothing counted yet. Scroll some reels and they will show up here.', style: TextStyle(color: BB.grey)));
+      return BBCard(child: Text('Nothing counted yet. Scroll some reels and they will show up here.', style: TextStyle(color: context.muted)));
     }
     final total = byApp.values.fold(0, (s, v) => s + v.$1);
     final sorted = byApp.entries.toList()..sort((a, b) => b.value.$1.compareTo(a.value.$1));
@@ -240,13 +242,13 @@ class _AppsBreakdown extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(children: [
-              AppBadge(name: e.key, size: 32),
+              AppBadge(name: e.key, pkg: pkgOf[e.key], size: 32),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
                     Expanded(child: Text(e.key, style: const TextStyle(fontWeight: FontWeight.w700))),
-                    Text('${e.value.$1} reels • ${formatMinutes((e.value.$2 / 60000).round())}', style: const TextStyle(color: BB.grey, fontSize: 13)),
+                    Text('${e.value.$1} reels • ${formatMinutes((e.value.$2 / 60000).round())}', style: TextStyle(color: context.muted, fontSize: 13)),
                   ]),
                   const SizedBox(height: 6),
                   ClipRRect(

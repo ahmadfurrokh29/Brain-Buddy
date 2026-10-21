@@ -13,10 +13,19 @@ class BB {
   static const ink = Color(0xFF1B2430);
   static const grey = Color(0xFF5B6573);
   static const cloud = Color(0xFFF7F9FC);
-  static const night = Color(0xFF121826);
-  static const nightCard = Color(0xFF1C2433);
-  static const brainPink = Color(0xFFFF9EB5);
-  static const brainPinkDark = Color(0xFFE0688A);
+  /// Dark mode: neutral charcoal greys (no blue tint) so the colourful brain stands out.
+  static const night = Color(0xFF0F0F0F);
+  static const nightCard = Color(0xFF1E1E1E);
+  static const nightRaised = Color(0xFF2A2A2A);
+  static const nightBorder = Color(0xFF2F2F2F);
+  static const greyOnDark = Color(0xFFA3A3A3);
+}
+
+extension ThemeColors on BuildContext {
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+
+  /// Secondary text: dark grey on light backgrounds, light grey on dark ones.
+  Color get muted => isDark ? BB.greyOnDark : BB.grey;
 }
 
 class AppTheme {
@@ -32,6 +41,7 @@ class AppTheme {
       secondary: BB.sun,
       error: BB.coral,
       surface: dark ? BB.nightCard : Colors.white,
+      surfaceContainerHighest: dark ? BB.nightRaised : null,
     );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b);
     final body = GoogleFonts.nunitoTextTheme(base.textTheme);
@@ -77,7 +87,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: dark ? Colors.white : BB.ink,
           minimumSize: const Size(0, 48),
-          side: BorderSide(color: dark ? Colors.white24 : const Color(0xFFDDE3EA)),
+          side: BorderSide(color: dark ? BB.nightBorder : const Color(0xFFDDE3EA)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           textStyle: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w700),
         ),
@@ -86,13 +96,21 @@ class AppTheme {
         thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.white : null),
         trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? BB.mint : null),
       ),
+      // The selected tab gets a soft mint highlight with a mint icon, so the icon never blends into it.
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: dark ? BB.nightCard : Colors.white,
-        indicatorColor: BB.mintLight,
+        backgroundColor: dark ? const Color(0xFF171717) : Colors.white,
+        indicatorColor: dark ? BB.mint.withValues(alpha: 0.22) : BB.mintLight,
         elevation: 0,
-        labelTextStyle: WidgetStatePropertyAll(GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w700)),
+        iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
+              color: s.contains(WidgetState.selected) ? (dark ? BB.mint : BB.mintDark) : (dark ? BB.greyOnDark : BB.grey),
+            )),
+        labelTextStyle: WidgetStateProperty.resolveWith((s) => GoogleFonts.nunito(
+              fontSize: 12,
+              fontWeight: s.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w700,
+              color: s.contains(WidgetState.selected) ? (dark ? BB.mint : BB.mintDark) : (dark ? BB.greyOnDark : BB.grey),
+            )),
       ),
-      dividerTheme: DividerThemeData(color: dark ? Colors.white12 : const Color(0xFFEDF1F5), space: 1),
+      dividerTheme: DividerThemeData(color: dark ? BB.nightBorder : const Color(0xFFEDF1F5), space: 1),
     );
   }
 }
