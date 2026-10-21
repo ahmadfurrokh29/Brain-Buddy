@@ -220,6 +220,31 @@ class DaySummary {
   DateTime get date => DateTime.parse(day);
 }
 
+/// Habits over the last weeks, used for trigger insights and the busy-hours heat map.
+class Patterns {
+  /// Watched reels by weekday (0 = Monday) and hour: heat[day][hour].
+  final List<List<int>> heat;
+
+  /// Minutes after midnight of the first reel, one entry per day with reels.
+  final List<int> firstReel;
+  final Map<String, int> intents;
+  final List<String> firmReasons;
+
+  const Patterns({required this.heat, required this.firstReel, required this.intents, required this.firmReasons});
+
+  factory Patterns.fromMap(Map<Object?, Object?> m) {
+    final flat = ((m['heat'] as List?) ?? List.filled(7 * 24, 0)).map(_int).toList();
+    return Patterns(
+      heat: [for (var d = 0; d < 7; d++) flat.sublist(d * 24, d * 24 + 24)],
+      firstReel: ((m['firstReel'] as List?) ?? const []).map(_int).toList(),
+      intents: ((m['intents'] as Map?) ?? const {}).map((k, v) => MapEntry(k.toString(), _int(v))),
+      firmReasons: ((m['firmReasons'] as List?) ?? const []).map((e) => e.toString()).toList(),
+    );
+  }
+
+  int get total => heat.fold(0, (s, row) => s + row.fold(0, (a, b) => a + b));
+}
+
 /// Health of the counter on this phone (used by Permissions and the Reliability Doctor).
 class DeviceStatus {
   final bool accessibility;

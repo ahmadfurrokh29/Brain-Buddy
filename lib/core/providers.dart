@@ -59,7 +59,12 @@ final daysProvider = FutureProvider.family<List<DaySummary>, int>((ref, count) {
   return ref.watch(bridgeProvider).getDays(count);
 });
 
-final statusProvider = FutureProvider<DeviceStatus>((ref) {
+final patternsProvider = FutureProvider.family<Patterns, int>((ref, count) {
+  ref.watch(changesProvider);
+  return ref.watch(bridgeProvider).getPatterns(count);
+});
+
+final statusProvider =FutureProvider<DeviceStatus>((ref) {
   ref.watch(changesProvider);
   return ref.watch(bridgeProvider).getStatus();
 });

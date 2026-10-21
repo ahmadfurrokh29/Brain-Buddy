@@ -8,6 +8,7 @@ import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../onboarding/setup_apps_screen.dart' show AppBadge;
+import 'patterns_section.dart';
 
 enum _Range { day, week, month }
 
@@ -90,6 +91,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               ],
               const SectionTitle('Apps'),
               _AppsBreakdown(days: shown),
+              if (_range != _Range.day)
+                PatternsSection(days: shown.length, appTotals: _watchedByApp(shown)),
               if (_range == _Range.day && list.last.intents.isNotEmpty) ...[
                 const SectionTitle('Why you opened reels'),
                 BBCard(
@@ -105,6 +108,17 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       ),
     );
   }
+}
+
+/// Watched reels per app name over [days].
+Map<String, int> _watchedByApp(List<DaySummary> days) {
+  final totals = <String, int>{};
+  for (final d in days) {
+    for (final a in d.apps) {
+      totals[a.name] = (totals[a.name] ?? 0) + a.watched;
+    }
+  }
+  return totals;
 }
 
 class _DaysChart extends StatelessWidget {

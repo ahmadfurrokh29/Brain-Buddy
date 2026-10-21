@@ -137,6 +137,38 @@ class Db private constructor(context: Context) :
         )
     }
 
+    /**
+     * Habits over [days] (keys "yyyy-MM-dd"), for trigger insights:
+     * heat = 7×24 watched reels by weekday (Mon first) and hour, first reel time of each day,
+     * reasons from "Why are you here?", and reasons typed into Firm locks.
+     */
+    fun patterns(days: List<String>): Map<String, Any> {
+        if (days.isEmpty()) return emptyMap()
+        val heat = IntArray(7 * 24)
+        val firstReel = HashMap<String, Int>() // day -> minutes after midnight
+        val cal = Calendar.getInstance()
+        val marks = days.joinToString(",") { "?" }
+        val r = readableDatabase
+        r.rawQuery("SELECT day, ts FROM events WHERE kind = 'watched' AND day IN ($marks) ORDER BY ts", days.toTypedArray()).use {
+            while (it.moveToNext()) {
+                cal.timeInMillis = it.getLong(1)
+                val weekday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7 // Mon=0 … Sun=6
+                val hour = cal.get(Calendar.HOUR_OF_DAY)
+                heat[weekday * 24 + hour]++
+                firstReel.putIfAbsent(it.getString(0), hour * 60 + cal.get(Calendar.MINUTE))
+            }
+        }
+        val intents = HashMap<String, Int>()
+        r.rawQuery("SELECT reason, COUNT(*) FROM intents WHERE day IN ($marks) GROUP BY reason", days.toTypedArray()).use {
+            while (it.moveToNext()) intents[it.getString(0)] = it.getInt(1)
+        }
+        val firmReasons = ArrayList<String>()
+        r.rawQuery("SELECT reason FROM unlocks WHERE kind IN ('firm','app_firm') AND reason IS NOT NULL AND day IN ($marks) ORDER BY ts DESC LIMIT 20", days.toTypedArray()).use {
+            while (it.moveToNext()) firmReasons.add(it.getString(0))
+        }
+        return mapOf("heat" to heat.toList(), "firstReel" to firstReel.values.toList(), "intents" to intents, "firmReasons" to firmReasons)
+    }
+
     fun exportJson(config: Map<String, Any>): String {
         val root = JSONObject()
         root.put("format", "brain_buddy_backup")

@@ -96,6 +96,12 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             val now = System.currentTimeMillis()
             (count - 1 downTo 0).map { db.daySummary(Config.dayKey(now - it * oneDay, config.dayStartHour)) }
         }
+        "getPatterns" -> {
+            val count = call.argument<Int>("count") ?: 30
+            val oneDay = 24L * 60 * 60 * 1000
+            val now = System.currentTimeMillis()
+            db.patterns((0 until count).map { Config.dayKey(now - it * oneDay, config.dayStartHour) })
+        }
         "pause" -> {
             val minutes = call.argument<Int>("minutes") ?: 0
             config.apply(mapOf("pausedUntil" to if (minutes <= 0) 0L else System.currentTimeMillis() + minutes * 60_000L))

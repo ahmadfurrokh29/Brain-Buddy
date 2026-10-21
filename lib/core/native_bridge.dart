@@ -33,6 +33,10 @@ class NativeBridge {
   Future<List<DaySummary>> getDays(int count) async =>
       (await _method.invokeMethod<List>('getDays', {'count': count}))!.map((e) => DaySummary.fromMap(e as Map)).toList();
 
+  /// Habits over the last [count] days.
+  Future<Patterns> getPatterns(int count) async =>
+      Patterns.fromMap((await _method.invokeMethod<Map>('getPatterns', {'count': count}))!);
+
   /// Pause counting for [minutes]. 0 resumes.
   Future<AppConfig> pause(int minutes) async =>
       AppConfig.fromMap((await _method.invokeMethod<Map>('pause', {'minutes': minutes}))!);
