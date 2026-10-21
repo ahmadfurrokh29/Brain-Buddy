@@ -3,6 +3,8 @@ package com.brainbuddy.brain_buddy.service
 import android.accessibilityservice.AccessibilityService
 import android.content.pm.ApplicationInfo
 import android.graphics.Rect
+import android.text.format.DateFormat
+import java.util.Date
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -160,6 +162,8 @@ class ReelCounterService : AccessibilityService() {
     private fun evaluate() {
         val root = rootInActiveWindow ?: return
         val pkg = root.packageName?.toString()
+        // Our own Firm-lock pop-up takes focus for typing; that isn't leaving the reels app.
+        if (pkg == packageName) return
         val app = TargetApps.find(pkg)
         if (app == null || !config.isTracked(app.pkg) || config.isPaused()) {
             if (reelsPkg != null) leaveReels()
@@ -335,7 +339,7 @@ class ReelCounterService : AccessibilityService() {
         notifier.onCount(watched, allowance)
         BrainWidgetProvider.refresh(this)
         CountBus.emit()
-        if (watched >= allowance) showLock(watched, allowance)
+        enforceLimits()
     }
 
     // ---------------------------------------------------------------- entering / leaving reels
@@ -355,7 +359,7 @@ class ReelCounterService : AccessibilityService() {
         if (config.floatingCounter) overlays.showCounter(watched, allowance)
         val now = System.currentTimeMillis()
         when {
-            watched >= allowance -> showLock(watched, allowance)
+            enforceLimits() -> {}
             config.intentPause && now - config.lastIntentAt > INTENT_COOLDOWN_MS -> {
                 config.lastIntentAt = now
                 overlays.showIntent(
@@ -376,19 +380,74 @@ class ReelCounterService : AccessibilityService() {
         overlays.hideAll()
     }
 
-    private fun showLock(watched: Int, allowance: Int) {
-        if (overlays.isLockShowing) return
+    // ---------------------------------------------------------------- limits and locks
+
+    /**
+     * Shows the right lock screen if reels aren't allowed right now (only the reels screen is covered;
+     * messages, stories and the rest of the app still work). Returns true when a lock is showing.
+     */
+    private fun enforceLimits(): Boolean {
+        if (overlays.isLockShowing) return true
+        val now = System.currentTimeMillis()
+        endExpiredHardLock(now)
+        if (config.isHardLocked(now)) {
+            showHardLock()
+            return true
+        }
+        val watched = db.watchedCount(day)
+        val allowance = config.allowanceToday()
+        if (watched < allowance) return false
         overlays.hideIntent()
-        overlays.showLock(
-            watched, allowance,
+        when (config.lockMode) {
+            "firm" -> overlays.showFirmLock(
+                watched, allowance, FIRM_WAIT_SEC,
+                onClose = { safe("lockClose") { goHome() } },
+                onUnlock = { reason -> safe("firmUnlock") { allowMore(5, "firm", reason) } },
+            )
+            "hard" -> {
+                config.startHardLock(now)
+                db.insertUnlock(day, "hard_start")
+                showHardLock()
+            }
+            else -> overlays.showGentleLock(
+                watched, allowance,
+                onClose = { safe("lockClose") { goHome() } },
+                onMore = { safe("gentleMore") { allowMore(5, "gentle_plus5") } },
+            )
+        }
+        return true
+    }
+
+    private fun showHardLock() {
+        val until = config.hardLockedUntil
+        val time = DateFormat.getTimeFormat(this).format(Date(until))
+        val whenText = if (config.today(until - 1) == config.today()) "until $time" else "until $time tomorrow"
+        overlays.showHardLock(
+            "Reels are locked",
+            "You reached your reel limit. Reels open again $whenText. Messages and stories still work.",
+            config.emergencyLeft(),
             onClose = { safe("lockClose") { goHome() } },
-            onMore = { safe("lockMore") { addFiveMore() } },
+            onEmergency = {
+                safe("emergency") {
+                    config.useEmergency()
+                    config.hardLockedUntil = 0
+                    allowMore(EMERGENCY_REELS, "emergency")
+                }
+            },
         )
     }
 
-    private fun addFiveMore() {
-        config.addExtraToday(5)
-        db.insertUnlock(day, "gentle_plus5")
+    /** A 1 h / 3 h Hard lock that ended during the same day gives 5 more reels, then locks again at the new limit. */
+    private fun endExpiredHardLock(now: Long) {
+        val until = config.hardLockedUntil
+        if (until == 0L || now < until) return
+        config.hardLockedUntil = 0
+        if (config.today(until - 1) == config.today(now)) allowMore(5, "hard_timeout")
+    }
+
+    private fun allowMore(reels: Int, kind: String, reason: String? = null) {
+        config.addExtraToday(reels)
+        db.insertUnlock(day, kind, reason)
         if (config.floatingCounter) overlays.updateCounter(db.watchedCount(day), config.allowanceToday())
         CountBus.emit()
     }
@@ -404,6 +463,7 @@ class ReelCounterService : AccessibilityService() {
         val pkg = reelsPkg ?: return
         val now = System.currentTimeMillis()
         val activePkg = rootInActiveWindow?.packageName?.toString()
+        if (activePkg == packageName) return // our Firm-lock pop-up has focus
         if (activePkg != null && activePkg != pkg) {
             if (!evalScheduled) { evalScheduled = true; main.post(evaluateRunnable) }
             return
@@ -442,6 +502,8 @@ class ReelCounterService : AccessibilityService() {
 
     companion object {
         private const val INTENT_COOLDOWN_MS = 10 * 60 * 1000L
+        private const val FIRM_WAIT_SEC = 60
+        private const val EMERGENCY_REELS = 10
         /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
         private const val SETTLE_MS = 400L
         private const val TEXT_WAIT_MS = 3000L

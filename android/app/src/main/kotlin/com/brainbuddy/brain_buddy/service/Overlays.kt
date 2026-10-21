@@ -18,6 +18,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -145,36 +148,139 @@ class Overlays(private val ctx: Context) {
 
     // ---------------------------------------------------------------- lock screen (Gentle)
 
-    fun showLock(watched: Int, budget: Int, onClose: () -> Unit, onMore: () -> Unit) {
+    /** Gentle lock: a breathing break, then "Close app" or "5 more reels". */
+    fun showGentleLock(watched: Int, budget: Int, onClose: () -> Unit, onMore: () -> Unit) {
         if (lock != null) return
-        val root = column(MINT_LIGHT)
+        val (root, actions) = lockScreen(
+            Mood.MELTED, "Time for a brain break", "You've watched $watched reels today. Your goal was $budget.", breathing = true,
+        )
+        actions.addView(button("Close app", primary = true) { hideLock(); onClose() })
+        actions.addView(button("5 more reels", primary = false) { hideLock(); onMore() }.withTop(8))
+        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
+        lock = root
+        // One full breath before the buttons appear.
+        revealLater(actions, 8000)
+    }
 
-        root.addView(text("🧠😴", 64f, bold = false))
-        root.addView(text("Time for a brain break", 26f, bold = true).withTop(12))
-        root.addView(text("You've watched $watched reels today. Your goal was $budget.", 16f, color = GREY).withTop(8))
-
-        val circleBox = FrameLayout(ctx)
-        val circle = View(ctx).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(MINT) }
-            alpha = 0.85f
+    /** Firm lock: wait [waitSec] seconds, then type why you want more reels to unlock 5. */
+    fun showFirmLock(watched: Int, budget: Int, waitSec: Int, onClose: () -> Unit, onUnlock: (String) -> Unit) {
+        if (lock != null) return
+        val (root, actions) = lockScreen(
+            Mood.MELTED, "Reel limit reached", "You've watched $watched of $budget reels today.", breathing = true,
+        )
+        val countdown = text("", 15f, color = GREY)
+        val reason = EditText(ctx).apply {
+            hint = "Why do you want more reels?"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(INK)
+            setHintTextColor(GREY)
+            minWidth = dp(260)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(Color.WHITE); setStroke(dp(1), MINT) }
+            visibility = View.GONE
         }
-        circleBox.addView(circle, FrameLayout.LayoutParams(dp(150), dp(150), Gravity.CENTER))
-        val breathLabel = text("Breathe in…", 18f, bold = true, color = Color.WHITE)
-        circleBox.addView(breathLabel, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        root.addView(circleBox, LinearLayout.LayoutParams(dp(200), dp(200)).apply { topMargin = dp(28); bottomMargin = dp(28) })
+        val unlock = button("Unlock 5 reels", primary = false) {
+            val typed = reason.text.toString().trim()
+            if (typed.length >= MIN_REASON) { hideLock(); onUnlock(typed) }
+        }.apply { alpha = 0.4f; visibility = View.GONE }
+        reason.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(e: Editable?) { unlock.alpha = if ((e?.trim()?.length ?: 0) >= MIN_REASON) 1f else 0.4f }
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+        actions.addView(countdown)
+        actions.addView(reason.withTop(8))
+        actions.addView(unlock.withTop(10))
+        actions.addView(button("Close app", primary = true) { hideLock(); onClose() }.withTop(10))
+        actions.visibility = View.VISIBLE
 
-        val buttons = LinearLayout(ctx).apply {
+        // Focusable so the keyboard can type the reason.
+        val lp = baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+        }
+        if (!add(root, lp)) return
+        lock = root
+
+        var left = waitSec
+        val ticker = object : Runnable {
+            override fun run() {
+                if (lock !== root) return
+                if (left > 0) {
+                    countdown.text = "You can ask for more reels in $left s"
+                    left--
+                    main.postDelayed(this, 1000)
+                } else {
+                    countdown.text = "Type at least $MIN_REASON characters to unlock 5 more reels."
+                    reason.visibility = View.VISIBLE
+                    unlock.visibility = View.VISIBLE
+                }
+            }
+        }
+        main.post(ticker)
+    }
+
+    /** Hard lock: reels stay locked. Only "Close app", plus an emergency unlock if any are left this week. */
+    fun showHardLock(title: String, message: String, emergencyLeft: Int, onClose: () -> Unit, onEmergency: (() -> Unit)?) {
+        if (lock != null) return
+        val (root, actions) = lockScreen(Mood.MELTED, title, message, breathing = false)
+        actions.addView(button("Close app", primary = true) { hideLock(); onClose() })
+        if (onEmergency != null && emergencyLeft > 0) {
+            var armed = false
+            lateinit var emergency: TextView
+            emergency = button("Emergency unlock ($emergencyLeft left this week)", primary = false) {
+                if (!armed) {
+                    armed = true
+                    emergency.text = "Tap again to use it. This can't be undone."
+                    emergency.setTextColor(CORAL)
+                } else {
+                    hideLock(); onEmergency()
+                }
+            }
+            actions.addView(emergency.withTop(10))
+        }
+        actions.visibility = View.VISIBLE
+        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
+        lock = root
+    }
+
+    fun hideLock() {
+        breathing?.cancel()
+        breathing = null
+        lock?.let { remove(it) }
+        lock = null
+    }
+
+    /** Shared layout for all lock screens: brain, title, message, optional breathing circle, actions area. */
+    private fun lockScreen(mood: Mood, title: String, message: String, breathing: Boolean): Pair<LinearLayout, LinearLayout> {
+        val root = column(MINT_LIGHT)
+        root.addView(BrainView(ctx).apply { this.mood = mood }, LinearLayout.LayoutParams(dp(120), dp(120)))
+        root.addView(text(title, 26f, bold = true).withTop(12))
+        root.addView(text(message, 16f, color = GREY).withTop(8))
+        if (breathing) {
+            val circleBox = FrameLayout(ctx)
+            val circle = View(ctx).apply {
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(MINT) }
+                alpha = 0.85f
+            }
+            circleBox.addView(circle, FrameLayout.LayoutParams(dp(130), dp(130), Gravity.CENTER))
+            val label = text("Breathe in…", 17f, bold = true, color = Color.WHITE)
+            circleBox.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            root.addView(circleBox, LinearLayout.LayoutParams(dp(170), dp(170)).apply { topMargin = dp(20); bottomMargin = dp(20) })
+            startBreathing(circle, label)
+        } else {
+            root.addView(View(ctx), LinearLayout.LayoutParams(1, dp(36)))
+        }
+        val actions = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             visibility = View.INVISIBLE
         }
-        buttons.addView(button("Close app", primary = true) { hideLock(); onClose() })
-        buttons.addView(button("5 more reels", primary = false) { hideLock(); onMore() }.withTop(8))
-        root.addView(buttons)
+        root.addView(actions)
+        return root to actions
+    }
 
-        if (!add(root, baseParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))) return
-        lock = root
-
+    private fun startBreathing(circle: View, label: TextView) {
         var inhale = true
         breathing = ObjectAnimator.ofPropertyValuesHolder(
             circle,
@@ -187,20 +293,15 @@ class Overlays(private val ctx: Context) {
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationRepeat(animation: Animator) {
                     inhale = !inhale
-                    breathLabel.text = if (inhale) "Breathe in…" else "Breathe out…"
+                    label.text = if (inhale) "Breathe in…" else "Breathe out…"
                 }
             })
             start()
         }
-        // One full breath before the buttons appear.
-        main.postDelayed({ buttons.visibility = View.VISIBLE; buttons.alpha = 0f; buttons.animate().alpha(1f).start() }, 8000)
     }
 
-    fun hideLock() {
-        breathing?.cancel()
-        breathing = null
-        lock?.let { remove(it) }
-        lock = null
+    private fun revealLater(view: View, delayMs: Long) {
+        main.postDelayed({ view.visibility = View.VISIBLE; view.alpha = 0f; view.animate().alpha(1f).start() }, delayMs)
     }
 
     // ---------------------------------------------------------------- intent pause
@@ -303,5 +404,6 @@ class Overlays(private val ctx: Context) {
         val CORAL = Color.parseColor("#FF6B6B")
         val INK = Color.parseColor("#1B2430")
         val GREY = Color.parseColor("#5B6573")
+        private const val MIN_REASON = 10
     }
 }

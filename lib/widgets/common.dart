@@ -118,6 +118,26 @@ class Dots extends StatelessWidget {
   }
 }
 
+/// During the free beta every Pro feature is open to everyone. Later this asks RevenueCat.
+const kBetaAllPro = true;
+
+/// Small yellow "PRO" tag on Pro features. In the beta it reads "PRO · free in beta".
+class ProTag extends StatelessWidget {
+  const ProTag({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: BB.sun.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(8)),
+      child: Text(
+        kBetaAllPro ? 'PRO · free in beta' : 'PRO',
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFB38600)),
+      ),
+    );
+  }
+}
+
 String formatMinutes(int minutes) {
   if (minutes < 60) return '${minutes}m';
   final h = minutes ~/ 60, m = minutes % 60;

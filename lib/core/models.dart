@@ -21,7 +21,21 @@ class AppConfig {
   final int pausedUntil;
   final int extraToday;
 
+  /// "gentle", "firm" or "hard".
+  final String lockMode;
+
+  /// How long a Hard lock lasts: "1h", "3h" or "tomorrow".
+  final String hardDuration;
+  final int emergencyPerWeek;
+  final int emergencyLeft;
+  final int hardLockedUntil;
+
   const AppConfig({
+    required this.lockMode,
+    required this.hardDuration,
+    required this.emergencyPerWeek,
+    required this.emergencyLeft,
+    required this.hardLockedUntil,
     required this.tracked,
     required this.budget,
     required this.dwellSec,
@@ -39,6 +53,11 @@ class AppConfig {
   });
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
+        lockMode: m['lockMode'] as String? ?? 'gentle',
+        hardDuration: m['hardDuration'] as String? ?? 'tomorrow',
+        emergencyPerWeek: _int(m['emergencyPerWeek']),
+        emergencyLeft: _int(m['emergencyLeft']),
+        hardLockedUntil: _int(m['hardLockedUntil']),
         tracked: ((m['tracked'] as List?) ?? const []).map((e) => e.toString()).toSet(),
         budget: _int(m['budget']),
         dwellSec: _int(m['dwellSec']),
@@ -57,6 +76,9 @@ class AppConfig {
 
   int get allowanceToday => budget + extraToday;
   bool get isPaused => DateTime.now().millisecondsSinceEpoch < pausedUntil;
+
+  /// A Hard lock is running: reels are blocked and rules can't be loosened until it ends.
+  bool get isHardLocked => DateTime.now().millisecondsSinceEpoch < hardLockedUntil;
 }
 
 class AppStat {

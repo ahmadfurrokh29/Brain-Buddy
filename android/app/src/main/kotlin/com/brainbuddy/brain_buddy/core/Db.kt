@@ -17,17 +17,20 @@ import java.util.Calendar
  * intents    – answers to "Why are you here?"
  */
 class Db private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "brain_buddy.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "brain_buddy.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, k TEXT NOT NULL, kind TEXT NOT NULL)")
         db.execSQL("CREATE INDEX events_day ON events(day)")
         db.execSQL("CREATE TABLE time_spent(day TEXT NOT NULL, pkg TEXT NOT NULL, ms INTEGER NOT NULL, PRIMARY KEY(day, pkg))")
-        db.execSQL("CREATE TABLE unlocks(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE unlocks(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL, reason TEXT)")
         db.execSQL("CREATE TABLE intents(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, reason TEXT NOT NULL)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // v2: Firm lock stores the reason the user typed.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE unlocks ADD COLUMN reason TEXT")
+    }
 
     fun insertEvent(day: String, pkg: String, key: String, kind: String) {
         writableDatabase.insert("events", null, ContentValues().apply {
@@ -54,9 +57,9 @@ class Db private constructor(context: Context) :
         }
     }
 
-    fun insertUnlock(day: String, kind: String) {
+    fun insertUnlock(day: String, kind: String, reason: String? = null) {
         writableDatabase.insert("unlocks", null, ContentValues().apply {
-            put("day", day); put("ts", System.currentTimeMillis()); put("kind", kind)
+            put("day", day); put("ts", System.currentTimeMillis()); put("kind", kind); put("reason", reason)
         })
     }
 
