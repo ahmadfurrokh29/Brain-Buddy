@@ -655,7 +655,10 @@ class ReelCounterService : AccessibilityService() {
         if (today != day) {
             flushTime()
             // A new day: the finished day's final numbers go to the backup.
-            if (day.isNotEmpty()) CloudBackup.backup(this, force = true)
+            if (day.isNotEmpty()) {
+                CloudBackup.backup(this, force = true)
+                if (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY) notifier.receiptReady()
+            }
             day = today
             counted.clear()
             counted.addAll(db.countedKeys(day))

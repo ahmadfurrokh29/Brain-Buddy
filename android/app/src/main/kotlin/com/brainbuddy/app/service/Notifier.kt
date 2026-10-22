@@ -33,6 +33,9 @@ class Notifier(private val ctx: Context, private val config: Config) {
         }
     }
 
+    /** Monday morning: last week's receipt is ready to see and share. */
+    fun receiptReady() = show("Your Weekly Reel Receipt is ready 🧾", "See how your week went and share it with friends.")
+
     /** "You earned 10 reels by walking 🚶" */
     fun earned(reels: Int, how: String) = show("You earned $reels reels 🎉", "Nice $how! They're added to today's budget.")
 

@@ -10,6 +10,7 @@ import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brain_buddy.dart';
 import '../../widgets/common.dart';
+import '../insights/receipt_sheet.dart';
 import '../limits/earn_reels.dart';
 import '../onboarding/setup_apps_screen.dart' show AppBadge;
 
@@ -84,6 +85,19 @@ class HomeScreen extends ConsumerWidget {
                 StatTile(icon: Icons.local_fire_department_rounded, color: BB.coral, value: '$streak', label: streak == 1 ? 'day streak' : 'day streak'),
               ]),
               if (c.earnEnabled) ...[const SizedBox(height: 12), EarnReelsCard(c: c)],
+              // Sunday and Monday: the week's receipt is ready to look at and share.
+              if (DateTime.now().weekday == DateTime.sunday || DateTime.now().weekday == DateTime.monday) ...[
+                const SizedBox(height: 12),
+                BBCard(
+                  onTap: () => showWeeklyReceipt(context),
+                  child: const Row(children: [
+                    Text('🧾', style: TextStyle(fontSize: 28)),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Your Weekly Reel Receipt is ready', style: TextStyle(fontWeight: FontWeight.w800))),
+                    Icon(Icons.chevron_right_rounded),
+                  ]),
+                ),
+              ],
               SectionTitle('App activity', trailing: TextButton(onPressed: () => context.go('/insights'), child: const Text('Details'))),
               if (d.apps.isEmpty)
                 BBCard(

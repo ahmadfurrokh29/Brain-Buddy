@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../onboarding/setup_apps_screen.dart' show AppBadge;
 import 'patterns_section.dart';
+import 'receipt_sheet.dart';
 
 enum _Range { day, week, month }
 
@@ -66,6 +67,12 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                 const SizedBox(width: 10),
                 StatTile(icon: Icons.lock_open_rounded, color: BB.coral, value: '$unlocks', label: 'extra unlocks'),
               ]),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => showWeeklyReceipt(context),
+                icon: const Icon(Icons.receipt_long_rounded),
+                label: const Text('My Weekly Reel Receipt'),
+              ),
               SectionTitle(_range == _Range.day ? 'Reels by hour' : 'Reels per day'),
               BBCard(
                 padding: const EdgeInsets.fromLTRB(8, 20, 16, 8),
