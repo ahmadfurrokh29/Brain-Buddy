@@ -58,7 +58,8 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(s.healthy ? 'All good!' : 'Counting needs a fix',
                             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: BB.ink)),
-                        Text('Phone: ${brand.name} ${s.model}', style: TextStyle(color: context.muted)),
+                        // The card is always light, so the text stays dark in both themes.
+                        Text('Phone: ${brand.name} ${s.model}', style: const TextStyle(color: BB.grey)),
                       ]),
                     ),
                   ]),

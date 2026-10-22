@@ -68,7 +68,11 @@ class _SetupAppsScreenState extends ConsumerState<SetupAppsScreen> {
                   ),
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: BB.sunLight, borderRadius: BorderRadius.circular(12)),
+                    // Soft yellow on light theme, a dim yellow tint on dark theme; text keeps the theme colour.
+                    decoration: BoxDecoration(
+                      color: context.isDark ? BB.sun.withValues(alpha: 0.15) : BB.sunLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: const Row(children: [
                       Icon(Icons.lightbulb_rounded, color: Color(0xFFE0A800), size: 20),
                       SizedBox(width: 8),
