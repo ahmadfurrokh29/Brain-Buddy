@@ -157,7 +157,24 @@ class _ProfileFormState extends ConsumerState<ProfileForm> {
       ]),
       const SizedBox(height: 20),
       FilledButton(onPressed: valid && !_busy ? _save : null, child: const Text('Save')),
+      // Changed your mind about how to sign in? Go back before anything is saved.
+      if (widget.initial == null)
+        TextButton(
+          onPressed: _busy ? null : _useDifferentSignIn,
+          child: const Text('Use a different sign-in'),
+        ),
     ]);
+  }
+
+  Future<void> _useDifferentSignIn() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(squadsRepoProvider).cancelSignIn();
+    } catch (e) {
+      if (mounted) showSnack(context, 'Could not go back: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
@@ -185,23 +202,19 @@ class _SquadList extends ConsumerWidget {
           ),
         for (final s in list) ...[_SquadCard(squad: s), const SizedBox(height: 10)],
         const SizedBox(height: 6),
-        Row(children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _create(context, ref),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Create squad'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _join(context, ref),
-              icon: const Icon(Icons.vpn_key_rounded),
-              label: const Text('Join with code'),
-            ),
-          ),
-        ]),
+        // Full-width and stacked, so the labels fit even with large text/display size settings.
+        FilledButton.icon(
+          onPressed: () => _create(context, ref),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Create squad'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+          onPressed: () => _join(context, ref),
+          icon: const Icon(Icons.vpn_key_rounded),
+          label: const Text('Join with code'),
+        ),
       ]),
     );
   }

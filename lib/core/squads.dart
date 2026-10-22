@@ -112,17 +112,48 @@ class SquadsRepo {
   User? get user => auth.currentUser;
 
   Future<void> signInWithGoogle() async {
+    final idToken = await _googleIdToken();
+    await auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+  }
+
+  Future<void> signInAsGuest() => auth.signInAnonymously();
+
+  Future<String?> _googleIdToken() async {
     final google = GoogleSignIn.instance;
     if (!_googleReady) {
       await google.initialize();
       _googleReady = true;
     }
-    final account = await google.authenticate();
-    final idToken = account.authentication.idToken;
-    await auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+    return (await google.authenticate()).authentication.idToken;
   }
 
-  Future<void> signInAsGuest() => auth.signInAnonymously();
+  /// Turns a guest account into a Google account. Squads and nickname are kept, and the account
+  /// can then be used on another phone.
+  Future<void> upgradeGuestToGoogle() async {
+    final idToken = await _googleIdToken();
+    try {
+      await user!.linkWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+      await user!.reload();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'credential-already-in-use' || e.code == 'email-already-in-use') {
+        throw const SquadException(
+            'That Google account already has Brain Buddy. Sign out of the guest account, then sign in with Google.');
+      }
+      rethrow;
+    }
+  }
+
+  /// Backs out of a sign-in that was just made (nickname not chosen yet). A fresh guest account
+  /// has nothing in it and could never be signed into again, so it is deleted rather than left behind.
+  Future<void> cancelSignIn() async {
+    final u = user;
+    if (u == null) return;
+    if (u.isAnonymous) {
+      await u.delete();
+    } else {
+      await signOut();
+    }
+  }
 
   Future<Profile?> profile() async {
     final uid = user?.uid;
