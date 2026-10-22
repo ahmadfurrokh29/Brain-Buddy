@@ -17,6 +17,7 @@ class MainShell extends StatelessWidget {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights_rounded), label: 'Insights'),
           NavigationDestination(icon: Icon(Icons.lock_clock_outlined), selectedIcon: Icon(Icons.lock_clock_rounded), label: 'Limits'),
+          NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups_rounded), label: 'Squads'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: 'Settings'),
         ],
       ),

@@ -10,6 +10,9 @@ import 'native_bridge.dart';
 
 final bridgeProvider = Provider<NativeBridge>((ref) => NativeBridge());
 
+/// Settings key for anonymous crash reports (Firebase Crashlytics).
+const kCrashReportsKey = 'crashReports';
+
 /// Set in main() before the app starts.
 final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError('prefs not ready'));
 

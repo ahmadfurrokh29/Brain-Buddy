@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// Brain Buddy Firestore rules.
+// Only Squads live online: nicknames, avatars and weekly reel counts. Nothing about which reels or apps.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function squad(squadId) {
+      return get(/databases/$(database)/documents/squads/$(squadId)).data;
+    }
+
+    // The squad as it will be after this write (batches create the squad, its code and first member together).
+    function squadAfter(squadId) {
+      return getAfter(/databases/$(database)/documents/squads/$(squadId)).data;
+    }
+
+    function isMemberOf(squadId) {
+      return signedIn() && request.auth.uid in squad(squadId).memberUids;
+    }
+
+    // Profile: nickname + avatar emoji. Readable by signed-in users, writable only by its owner.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid
+        && (request.method == 'delete'
+            || (request.resource.data.keys().hasOnly(['name', 'avatar'])
+                && request.resource.data.name is string
+                && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 24));
+    }
+
+    // Invite code -> squad id. Anyone signed in can look a code up (that's how joining works).
+    match /codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['squadId'])
+        && squadAfter(request.resource.data.squadId).ownerUid == request.auth.uid;
+      allow delete: if signedIn() && squad(resource.data.squadId).ownerUid == request.auth.uid;
+    }
+
+    match /squads/{squadId} {
+      // Squad ids are random, so reading needs the invite code first.
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30;
+
+      // Members can only add or remove themselves; the owner can rename, remove others or hand over.
+      allow update: if signedIn() && request.resource.data.memberUids.size() <= 8 && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+          && (request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()) == [request.auth.uid].toSet()
+              || resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()) == [request.auth.uid].toSet()))
+        || resource.data.ownerUid == request.auth.uid
+      );
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      // Each member's numbers. Only squad members can see them; only the member writes their own.
+      match /members/{uid} {
+        allow read: if isMemberOf(squadId);
+
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.auth.uid in squadAfter(squadId).memberUids
+          && validCounts();
+
+        allow delete: if signedIn() && (request.auth.uid == uid || squad(squadId).ownerUid == request.auth.uid);
+      }
+    }
+
+    // Anti-cheat: counts are whole numbers, and within the same week the count never goes down.
+    function validCounts() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'avatar', 'weekKey', 'weekWatched', 'todayWatched',
+                               'prevWeekKey', 'prevWeekWatched', 'updatedAt'])
+        && (!('weekWatched' in d) || (d.weekWatched is int && d.weekWatched >= 0 && d.weekWatched <= 20000))
+        && (!('todayWatched' in d) || (d.todayWatched is int && d.todayWatched >= 0))
+        && (resource == null
+            || !('weekWatched' in resource.data)
+            || resource.data.weekKey != d.weekKey
+            || d.weekWatched >= resource.data.weekWatched);
+    }
+  }
+}

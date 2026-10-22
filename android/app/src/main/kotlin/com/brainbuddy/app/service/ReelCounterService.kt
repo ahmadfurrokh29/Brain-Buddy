@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.brainbuddy.app.core.Config
 import com.brainbuddy.app.core.CountBus
 import com.brainbuddy.app.core.Db
+import com.brainbuddy.app.core.SquadSync
 import com.brainbuddy.app.core.TargetApps
 import com.brainbuddy.app.widget.BrainWidgetProvider
 
@@ -348,6 +349,7 @@ class ReelCounterService : AccessibilityService() {
         notifier.onCount(watched, allowance)
         BrainWidgetProvider.refresh(this)
         CountBus.emit()
+        SquadSync.sync(this)
         enforceLimits()
     }
 

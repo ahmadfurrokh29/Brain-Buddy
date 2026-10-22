@@ -15,6 +15,12 @@ class NativeBridge {
   Future<AppConfig> setConfig(Map<String, Object?> values) async =>
       AppConfig.fromMap((await _method.invokeMethod<Map>('setConfig', values))!);
 
+  /// Settings update without reading the result (used by the Squads code).
+  Future<void> setConfigRaw(Map<String, Object?> values) => _method.invokeMethod('setConfig', values);
+
+  /// Sends this week's counts to the user's Squads now.
+  Future<void> syncSquads() => _method.invokeMethod('syncSquads');
+
   Future<List<TargetApp>> getTargets() async =>
       (await _method.invokeMethod<List>('getTargets'))!.map((e) => TargetApp.fromMap(e as Map)).toList();
 

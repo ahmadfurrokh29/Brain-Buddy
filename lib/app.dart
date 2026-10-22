@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/providers.dart';
+import 'core/squads.dart';
 import 'features/doctor/doctor_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/insights/insights_screen.dart';
@@ -13,6 +14,8 @@ import 'features/onboarding/splash_screen.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/pro/paywall_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'features/squads/squad_detail_screen.dart';
+import 'features/squads/squads_screen.dart';
 import 'features/shell/main_shell.dart';
 import 'theme/app_theme.dart';
 
@@ -25,12 +28,14 @@ final _router = GoRouter(
     GoRoute(path: '/setup/permissions', builder: (_, _) => const PermissionsScreen()),
     GoRoute(path: '/doctor', builder: (_, _) => const DoctorScreen()),
     GoRoute(path: '/pro', builder: (_, _) => const PaywallScreen()),
+    GoRoute(path: '/squads/:id', builder: (_, state) => SquadDetailScreen(squadId: state.pathParameters['id']!)),
     StatefulShellRoute.indexedStack(
       builder: (_, _, shell) => MainShell(shell: shell),
       branches: [
         StatefulShellBranch(routes: [GoRoute(path: '/home', builder: (_, _) => const HomeScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: '/insights', builder: (_, _) => const InsightsScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: '/limits', builder: (_, _) => const LimitsScreen())]),
+        StatefulShellBranch(routes: [GoRoute(path: '/squads', builder: (_, _) => const SquadsScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen())]),
       ],
     ),
@@ -52,6 +57,12 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
     super.initState();
     // Coming back from Android settings or a reel app: refresh counts and permission status.
     _lifecycle = AppLifecycleListener(onResume: () => refreshAll(ref));
+    // After signing in (on this or a new phone), tell the background counter which squads to sync.
+    ref.listenManual(authUserProvider, (prev, next) {
+      if (next.value != null && prev?.value?.uid != next.value!.uid) {
+        ref.read(squadsRepoProvider).refreshSync().catchError((_) {});
+      }
+    }, fireImmediately: true);
   }
 
   @override

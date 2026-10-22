@@ -13,6 +13,7 @@ import '../../core/providers.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../home/home_screen.dart' show showPauseSheet;
+import 'account_section.dart';
 import '../onboarding/setup_apps_screen.dart' show AppBadge;
 
 class SettingsScreen extends ConsumerWidget {
@@ -119,6 +120,7 @@ class _SettingsBody extends ConsumerWidget {
             ),
           ),
         ]),
+        const AccountSection(),
         const SectionTitle('Subscription'),
         _Group(children: [
           ListTile(

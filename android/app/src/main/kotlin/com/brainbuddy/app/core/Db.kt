@@ -74,6 +74,15 @@ class Db private constructor(context: Context) :
             if (it.moveToFirst()) it.getInt(0) else 0
         }
 
+    /** Watched reels over several days (e.g. this week, for Squads). */
+    fun watchedCount(days: List<String>): Int {
+        if (days.isEmpty()) return 0
+        val marks = days.joinToString(",") { "?" }
+        return readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM events WHERE kind = 'watched' AND day IN ($marks)", days.toTypedArray(),
+        ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }
+
     /** Reels watched today in one app (both TikTok package names count as one app). */
     fun watchedCount(day: String, pkgs: Collection<String>): Int {
         if (pkgs.isEmpty()) return 0

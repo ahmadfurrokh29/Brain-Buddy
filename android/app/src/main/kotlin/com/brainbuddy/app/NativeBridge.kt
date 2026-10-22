@@ -19,6 +19,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.brainbuddy.app.core.Config
 import com.brainbuddy.app.core.CountBus
 import com.brainbuddy.app.core.Db
+import com.brainbuddy.app.core.SquadSync
 import com.brainbuddy.app.core.TargetApps
 import com.brainbuddy.app.service.ReelCounterService
 import com.brainbuddy.app.widget.BrainWidgetProvider
@@ -88,6 +89,10 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             mapOf("pkg" to (installed ?: app.pkg), "pkgs" to pkgs, "name" to app.name, "installed" to (installed != null))
         }
         "getAppIcons" -> appIcons()
+        "syncSquads" -> {
+            SquadSync.sync(activity, force = true)
+            true
+        }
         "getStatus" -> status()
         "getDay" -> db.daySummary(call.argument<String>("day") ?: config.today())
         "getDays" -> {

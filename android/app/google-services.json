@@ -12,7 +12,20 @@
           "package_name": "com.brainbuddy.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "278232562794-tcgm1k601dvj6qc1goqb3i2n236cu5jh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.brainbuddy.app",
+            "certificate_hash": "3e96ff97204d8e5f77f9ee604a1ca1dc852a70b6"
+          }
+        },
+        {
+          "client_id": "278232562794-fu8na69vl9nkkccp5q01gfg8nsk4lj8f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCTmp12E2GUxXE5zhTAmuU0t-ZUZw4AQ4Y"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "278232562794-fu8na69vl9nkkccp5q01gfg8nsk4lj8f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

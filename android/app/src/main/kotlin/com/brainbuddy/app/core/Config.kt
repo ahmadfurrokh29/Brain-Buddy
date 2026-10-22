@@ -197,6 +197,9 @@ class Config(context: Context) {
         prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
     }
 
+    /** Squads the signed-in user belongs to; the counter syncs counts to each. */
+    val squadIds: List<String> get() = prefs.getStringSet("squadIds", emptySet())!!.toList()
+
     fun isTracked(pkg: String) = pkg in tracked
     fun isPaused(now: Long = System.currentTimeMillis()) = now < pausedUntil
 
@@ -329,6 +332,7 @@ class Config(context: Context) {
                 "lockMode", "hardDuration" -> e.putString(k as String, v as String)
                 "schedules" -> if (keepsActiveSchedule(v as String)) e.putString("schedules", v)
                 "appBudgets" -> e.putString("appBudgets", v as String)
+                "squadIds" -> e.putStringSet("squadIds", (v as List<*>).map { it.toString() }.toSet())
                 "showSkimmed", "ignoreAds", "floatingCounter", "intentPause", "warn50", "warn80", "warn100" ->
                     e.putBoolean(k as String, v as Boolean)
                 "pausedUntil" -> e.putLong("pausedUntil", (v as Number).toLong())
