@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy.service
+package com.brainbuddy.app.service
 
 import android.animation.ValueAnimator
 import android.content.Context
@@ -11,7 +11,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.view.View
 import android.view.animation.LinearInterpolator
-import com.brainbuddy.brain_buddy.core.Mood
+import com.brainbuddy.app.core.Mood
 import kotlin.math.PI
 import kotlin.math.sin
 

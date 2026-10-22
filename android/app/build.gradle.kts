@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.brainbuddy.brain_buddy"
+    namespace = "com.brainbuddy.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.brainbuddy.brain_buddy"
+        applicationId = "com.brainbuddy.app"
         // Android 8.0+: needed for notification channels and accessibility overlays.
         minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion

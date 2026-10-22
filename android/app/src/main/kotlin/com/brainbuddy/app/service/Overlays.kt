@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy.service
+package com.brainbuddy.app.service
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -30,7 +30,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.brainbuddy.brain_buddy.core.Mood
+import com.brainbuddy.app.core.Mood
 
 /**
  * Pop-ups drawn over the reel apps. They use the accessibility overlay window type,

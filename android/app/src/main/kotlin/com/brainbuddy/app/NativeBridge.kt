@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy
+package com.brainbuddy.app
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -16,12 +16,12 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
-import com.brainbuddy.brain_buddy.core.Config
-import com.brainbuddy.brain_buddy.core.CountBus
-import com.brainbuddy.brain_buddy.core.Db
-import com.brainbuddy.brain_buddy.core.TargetApps
-import com.brainbuddy.brain_buddy.service.ReelCounterService
-import com.brainbuddy.brain_buddy.widget.BrainWidgetProvider
+import com.brainbuddy.app.core.Config
+import com.brainbuddy.app.core.CountBus
+import com.brainbuddy.app.core.Db
+import com.brainbuddy.app.core.TargetApps
+import com.brainbuddy.app.service.ReelCounterService
+import com.brainbuddy.app.widget.BrainWidgetProvider
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall

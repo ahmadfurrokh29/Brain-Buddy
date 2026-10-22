@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy.service
+package com.brainbuddy.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.pm.ApplicationInfo
@@ -13,11 +13,11 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.brainbuddy.brain_buddy.core.Config
-import com.brainbuddy.brain_buddy.core.CountBus
-import com.brainbuddy.brain_buddy.core.Db
-import com.brainbuddy.brain_buddy.core.TargetApps
-import com.brainbuddy.brain_buddy.widget.BrainWidgetProvider
+import com.brainbuddy.app.core.Config
+import com.brainbuddy.app.core.CountBus
+import com.brainbuddy.app.core.Db
+import com.brainbuddy.app.core.TargetApps
+import com.brainbuddy.app.widget.BrainWidgetProvider
 
 /**
  * Counts reels.

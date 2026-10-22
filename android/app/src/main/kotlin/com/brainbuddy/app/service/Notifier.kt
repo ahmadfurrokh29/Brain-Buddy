@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy.service
+package com.brainbuddy.app.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,9 +7,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.brainbuddy.brain_buddy.MainActivity
-import com.brainbuddy.brain_buddy.R
-import com.brainbuddy.brain_buddy.core.Config
+import com.brainbuddy.app.MainActivity
+import com.brainbuddy.app.R
+import com.brainbuddy.app.core.Config
 
 /** Budget warnings (50% / 80% / 100%). Each level fires at most once a day. */
 class Notifier(private val ctx: Context, private val config: Config) {

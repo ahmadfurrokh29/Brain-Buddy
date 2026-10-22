@@ -1,8 +1,8 @@
-package com.brainbuddy.brain_buddy.service
+package com.brainbuddy.app.service
 
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.brainbuddy.brain_buddy.core.TargetApp
+import com.brainbuddy.app.core.TargetApp
 
 /**
  * Reads the screen of a tracked app and answers two questions:

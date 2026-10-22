@@ -1,4 +1,4 @@
-package com.brainbuddy.brain_buddy
+package com.brainbuddy.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
