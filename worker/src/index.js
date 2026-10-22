@@ -101,6 +101,15 @@ async function getDoc(url, headers) {
 let jwksCache = { keys: null, until: 0 };
 
 async function verifyIdToken(header, projectId) {
+  // Any malformed token is simply "not signed in".
+  try {
+    return await checkIdToken(header, projectId);
+  } catch {
+    return null;
+  }
+}
+
+async function checkIdToken(header, projectId) {
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return null;
   const [h, p, s] = token.split('.');

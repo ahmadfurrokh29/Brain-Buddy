@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /// Address of the nudge Worker on Cloudflare (worker/). Empty until it is deployed; the 👋 button then hides.
-const kNudgeWorkerUrl = '';
+const kNudgeWorkerUrl = 'https://brain-buddy-nudge.brainbuddy-app.workers.dev';
 
 bool get nudgesAvailable => kNudgeWorkerUrl.isNotEmpty;
 
