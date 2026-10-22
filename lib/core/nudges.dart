@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 /// Address of the nudge Worker on Cloudflare (worker/). Empty until it is deployed; the 👋 button then hides.
 const kNudgeWorkerUrl = 'https://brain-buddy-nudge.brainbuddy-app.workers.dev';
@@ -17,10 +18,17 @@ Future<void> registerPushToken() async {
   if (uid == null) return;
   final messaging = FirebaseMessaging.instance;
   await messaging.requestPermission();
-  // The push address arrives (and later refreshes) on onRegistered.
-  _registrations ??= messaging.onRegistered.listen((t) {
+  // The push address (and later refreshes) arrives on onRegistered after register().
+  // This needs firebase_messaging_installation_id_enabled in the Android manifest.
+  _registrations ??= messaging.onRegistered.listen((t) async {
     final u = FirebaseAuth.instance.currentUser?.uid;
-    if (u != null) _save(u, t);
+    if (u == null) return;
+    try {
+      await _save(u, t);
+      debugPrint('BrainBuddy push: address saved');
+    } catch (e) {
+      debugPrint('BrainBuddy push: could not save address: $e');
+    }
   });
   await messaging.register();
 }

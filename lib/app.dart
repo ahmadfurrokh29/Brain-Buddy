@@ -64,7 +64,7 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
     ref.listenManual(authUserProvider, (prev, next) {
       if (next.value != null && prev?.value?.uid != next.value!.uid) {
         ref.read(squadsRepoProvider).refreshSync().catchError((_) {});
-        registerPushToken().catchError((_) {});
+        registerPushToken().catchError((Object e) => debugPrint('BrainBuddy push: could not register: $e'));
       }
     }, fireImmediately: true);
     // A nudge while Brain Buddy is open: Android only shows pushes automatically in the background.
