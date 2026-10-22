@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models.dart';
+import '../../core/providers.dart';
 import '../../core/squads.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brain_buddy.dart';
@@ -68,7 +69,13 @@ class _SignInState extends ConsumerState<_SignIn> {
           style: t.bodyLarge?.copyWith(color: context.muted), textAlign: TextAlign.center),
       const SizedBox(height: 24),
       FilledButton.icon(
-        onPressed: _busy ? null : () => _run(repo.signInWithGoogle),
+        onPressed: _busy
+            ? null
+            : () => _run(() async {
+                  await repo.signInWithGoogle();
+                  if (!mounted) return;
+                  await offerCloudRestore(this.context, ref);
+                }),
         icon: const Icon(Icons.account_circle_rounded),
         label: const Text('Continue with Google'),
       ),
@@ -94,6 +101,28 @@ class _SignInState extends ConsumerState<_SignIn> {
       if (_busy) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
     ]);
   }
+}
+
+/// On a new phone, right after Google sign-in: bring back history and settings from the cloud backup.
+Future<void> offerCloudRestore(BuildContext context, WidgetRef ref) async {
+  final repo = ref.read(squadsRepoProvider);
+  if (!await repo.shouldOfferRestore() || !context.mounted) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Restore your history?'),
+      content: const Text('Your Google account has a Brain Buddy backup: your daily reel history and settings. '
+          'Bring it to this phone?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restore')),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  final days = await repo.restoreFromCloud();
+  refreshAll(ref);
+  if (context.mounted) showSnack(context, 'Restored $days days of history ✅');
 }
 
 /// Nickname + avatar. Shown after the first sign-in, and from Settings to edit.

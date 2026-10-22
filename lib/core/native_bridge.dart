@@ -18,6 +18,18 @@ class NativeBridge {
   /// Settings update without reading the result (used by the Squads code).
   Future<void> setConfigRaw(Map<String, Object?> values) => _method.invokeMethod('setConfig', values);
 
+  /// Uploads day summaries and settings to the signed-in Google account now.
+  Future<void> backupNow() => _method.invokeMethod('backupNow');
+
+  /// Saves day summaries restored from the cloud. Returns how many days.
+  Future<int> importSummaries(String json) async => (await _method.invokeMethod<int>('importSummaries', {'json': json})) ?? 0;
+
+  /// Applies settings restored from the cloud.
+  Future<void> restoreSettings(Map<String, Object?> config) => _method.invokeMethod('restoreSettings', config);
+
+  /// How many days have data on this phone.
+  Future<int> localDays() async => (await _method.invokeMethod<int>('localDays')) ?? 0;
+
   /// Sends this week's counts to the user's Squads now.
   Future<void> syncSquads() => _method.invokeMethod('syncSquads');
 

@@ -61,6 +61,23 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
                 onTap: _deleteAccount,
               ),
             ] else ...[
+              SwitchListTile(
+                secondary: const Icon(Icons.cloud_upload_rounded),
+                value: ref.watch(configProvider).value?.cloudBackup ?? true,
+                title: const Text('Cloud backup'),
+                subtitle: const Text('Daily history and settings saved to your Google account, about every 30 minutes. '
+                    'Never individual reels.'),
+                onChanged: (v) async {
+                  await ref.read(configProvider.notifier).set({'cloudBackup': v});
+                  if (v) await ref.read(bridgeProvider).backupNow();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_download_rounded),
+                title: const Text('Restore from cloud backup'),
+                subtitle: const Text('Brings your history and settings to this phone.'),
+                onTap: _restoreFromCloud,
+              ),
               ListTile(
                 leading: const Icon(Icons.logout_rounded),
                 title: const Text('Sign out'),
@@ -109,6 +126,22 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       if (mounted) showSnack(context, 'Your account is now a Google account ✅');
     } catch (e) {
       if (mounted) showSnack(context, e.toString().split('\n').first);
+    }
+  }
+
+  Future<void> _restoreFromCloud() async {
+    final ok = await _confirm(
+      'Restore from cloud backup?',
+      'Days with no reels on this phone are filled in from your backup, and your settings are replaced by the backed-up ones.',
+      'Restore',
+    );
+    if (!ok) return;
+    try {
+      final days = await ref.read(squadsRepoProvider).restoreFromCloud();
+      refreshAll(ref);
+      if (mounted) showSnack(context, days == 0 ? 'No backup found yet.' : 'Restored $days days of history ✅');
+    } catch (e) {
+      if (mounted) showSnack(context, 'Could not restore: $e');
     }
   }
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -259,12 +260,48 @@ class SquadsRepo {
     } catch (_) {}
   }
 
-  /// Deletes the online account: leaves every squad, removes the profile, then the login itself.
+  // ---------------------------------------------------------------- cloud backup
+
+  /// After signing in with Google on a phone with (almost) no history, offer to restore from the cloud.
+  Future<bool> shouldOfferRestore() async {
+    final u = user;
+    if (u == null || u.isAnonymous) return false;
+    if (await bridge.localDays() >= 3) return false;
+    final days = await db.collection('users').doc(u.uid).collection('days').limit(1).get();
+    return days.docs.isNotEmpty;
+  }
+
+  /// Brings back day summaries and settings from the Google account. Returns how many days.
+  Future<int> restoreFromCloud() async {
+    final userDoc = db.collection('users').doc(user!.uid);
+    final days = await userDoc.collection('days').get();
+    final summaries = days.docs.map((d) => Map<String, dynamic>.of(d.data())..remove('updatedAt')).toList();
+    final count = await bridge.importSummaries(jsonEncode(summaries));
+    final settings = (await userDoc.collection('backup').doc('settings').get()).data()?['config'] as Map?;
+    if (settings != null) {
+      // Running timers and today's extras belong to the old phone's day, not this one.
+      const skip = {'pausedUntil', 'hardLockedUntil', 'focusUntil', 'today', 'extraToday', 'emergencyLeft', 'earnedToday', 'stepsToday', 'activeSchedule'};
+      await bridge.restoreSettings({
+        for (final e in settings.entries)
+          if (!skip.contains(e.key)) e.key as String: e.value,
+      });
+    }
+    return count;
+  }
+
+  /// Deletes the online account: leaves every squad, removes the profile and backup, then the login itself.
   Future<void> deleteAccount() async {
     final uid = user!.uid;
     final squads = await db.collection('squads').where('memberUids', arrayContains: uid).get();
     for (final d in squads.docs) {
       await leave(Squad.fromDoc(d));
+    }
+    if (!user!.isAnonymous) {
+      final userDoc = db.collection('users').doc(uid);
+      for (final d in (await userDoc.collection('days').get()).docs) {
+        await d.reference.delete();
+      }
+      await userDoc.collection('backup').doc('settings').delete();
     }
     await db.collection('users').doc(uid).delete();
     await bridge.setConfigRaw({'squadIds': <String>[]});

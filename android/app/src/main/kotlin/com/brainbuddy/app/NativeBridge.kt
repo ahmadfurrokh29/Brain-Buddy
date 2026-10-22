@@ -16,6 +16,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import com.brainbuddy.app.core.CloudBackup
 import com.brainbuddy.app.core.Config
 import com.brainbuddy.app.core.CountBus
 import com.brainbuddy.app.core.Db
@@ -89,6 +90,21 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             mapOf("pkg" to (installed ?: app.pkg), "pkgs" to pkgs, "name" to app.name, "installed" to (installed != null))
         }
         "getAppIcons" -> appIcons()
+        "backupNow" -> {
+            CloudBackup.backup(activity, force = true)
+            true
+        }
+        "importSummaries" -> {
+            val count = db.importSummaries(call.argument<String>("json")!!)
+            afterDataChange()
+            count
+        }
+        "restoreSettings" -> {
+            config.apply(call.arguments as Map<*, *>)
+            afterDataChange()
+            config.toMap()
+        }
+        "localDays" -> db.daysWithData().size
         "syncSquads" -> {
             SquadSync.sync(activity, force = true)
             true

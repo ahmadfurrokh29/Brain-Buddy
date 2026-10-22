@@ -197,6 +197,14 @@ class Config(context: Context) {
         prefs.edit().putInt(key, prefs.getInt(key, 0) + 1).apply()
     }
 
+    /** Back up day summaries and settings to the signed-in Google account. */
+    val cloudBackup get() = prefs.getBoolean("cloudBackup", true)
+
+    /** Last day already uploaded; days after it (and it, since it may have grown) are uploaded next time. */
+    var lastBackupDay: String
+        get() = prefs.getString("lastBackupDay", "") ?: ""
+        set(v) = prefs.edit().putString("lastBackupDay", v).apply()
+
     /** Squads the signed-in user belongs to; the counter syncs counts to each. */
     val squadIds: List<String> get() = prefs.getStringSet("squadIds", emptySet())!!.toList()
 
@@ -294,6 +302,7 @@ class Config(context: Context) {
         "emergencyPerWeek" to emergencyPerWeek,
         "emergencyLeft" to emergencyLeft(),
         "hardLockedUntil" to hardLockedUntil,
+        "cloudBackup" to cloudBackup,
         "earnEnabled" to earnEnabled,
         "stepsPerReward" to stepsPerReward,
         "focusMinutes" to focusMinutes,
@@ -329,6 +338,7 @@ class Config(context: Context) {
                 "budget", "dwellSec", "dayStartHour", "intentWaitSec", "emergencyPerWeek",
                 "stepsPerReward", "focusMinutes", "maxEarnPerDay" -> e.putInt(k as String, (v as Number).toInt())
                 "earnEnabled" -> e.putBoolean("earnEnabled", v as Boolean)
+                "cloudBackup" -> e.putBoolean("cloudBackup", v as Boolean)
                 "lockMode", "hardDuration" -> e.putString(k as String, v as String)
                 "schedules" -> if (keepsActiveSchedule(v as String)) e.putString("schedules", v)
                 "appBudgets" -> e.putString("appBudgets", v as String)

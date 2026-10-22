@@ -66,6 +66,9 @@ class AppConfig {
   final int hardLockedUntil;
   final List<Schedule> schedules;
 
+  /// Back up history and settings to the signed-in Google account.
+  final bool cloudBackup;
+
   // Earn your reels: steps and focus sessions add reels to today's budget.
   final bool earnEnabled;
   final int stepsPerReward;
@@ -84,6 +87,7 @@ class AppConfig {
   final int activeScheduleUntil;
 
   const AppConfig({
+    required this.cloudBackup,
     required this.earnEnabled,
     required this.stepsPerReward,
     required this.focusMinutes,
@@ -118,6 +122,7 @@ class AppConfig {
   });
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
+        cloudBackup: m['cloudBackup'] as bool? ?? true,
         earnEnabled: m['earnEnabled'] as bool? ?? false,
         stepsPerReward: _int(m['stepsPerReward']),
         focusMinutes: _int(m['focusMinutes']),

@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.brainbuddy.app.core.Config
 import com.brainbuddy.app.core.CountBus
 import com.brainbuddy.app.core.Db
+import com.brainbuddy.app.core.CloudBackup
 import com.brainbuddy.app.core.SquadSync
 import com.brainbuddy.app.core.TargetApps
 import com.brainbuddy.app.widget.BrainWidgetProvider
@@ -350,6 +351,7 @@ class ReelCounterService : AccessibilityService() {
         BrainWidgetProvider.refresh(this)
         CountBus.emit()
         SquadSync.sync(this)
+        CloudBackup.backup(this)
         enforceLimits()
     }
 
@@ -652,6 +654,8 @@ class ReelCounterService : AccessibilityService() {
         val today = config.today()
         if (today != day) {
             flushTime()
+            // A new day: the finished day's final numbers go to the backup.
+            if (day.isNotEmpty()) CloudBackup.backup(this, force = true)
             day = today
             counted.clear()
             counted.addAll(db.countedKeys(day))

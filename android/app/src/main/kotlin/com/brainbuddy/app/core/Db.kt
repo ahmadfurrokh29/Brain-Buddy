@@ -17,7 +17,7 @@ import java.util.Calendar
  * intents    – answers to "Why are you here?"
  */
 class Db private constructor(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "brain_buddy.db", null, 2) {
+    SQLiteOpenHelper(context.applicationContext, "brain_buddy.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, k TEXT NOT NULL, kind TEXT NOT NULL)")
@@ -25,11 +25,18 @@ class Db private constructor(context: Context) :
         db.execSQL("CREATE TABLE time_spent(day TEXT NOT NULL, pkg TEXT NOT NULL, ms INTEGER NOT NULL, PRIMARY KEY(day, pkg))")
         db.execSQL("CREATE TABLE unlocks(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL, reason TEXT)")
         db.execSQL("CREATE TABLE intents(id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, ts INTEGER NOT NULL, pkg TEXT NOT NULL, reason TEXT NOT NULL)")
+        createImportedDays(db)
     }
+
+    /** Day summaries restored from cloud backup, for days with no reels recorded on this phone. */
+    private fun createImportedDays(db: SQLiteDatabase) =
+        db.execSQL("CREATE TABLE IF NOT EXISTS imported_days(day TEXT PRIMARY KEY, json TEXT NOT NULL)")
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // v2: Firm lock stores the reason the user typed.
         if (oldVersion < 2) db.execSQL("ALTER TABLE unlocks ADD COLUMN reason TEXT")
+        // v3: cloud backup restores day summaries.
+        if (oldVersion < 3) createImportedDays(db)
     }
 
     fun insertEvent(day: String, pkg: String, key: String, kind: String) {
@@ -78,9 +85,10 @@ class Db private constructor(context: Context) :
     fun watchedCount(days: List<String>): Int {
         if (days.isEmpty()) return 0
         val marks = days.joinToString(",") { "?" }
-        return readableDatabase.rawQuery(
+        val local = readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM events WHERE kind = 'watched' AND day IN ($marks)", days.toTypedArray(),
         ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        return local + daysWithoutEvents(days).sumOf { importedSummary(it)?.get("watched") as? Int ?: 0 }
     }
 
     /** Reels watched today in one app (both TikTok package names count as one app). */
@@ -140,10 +148,68 @@ class Db private constructor(context: Context) :
         r.rawQuery("SELECT reason, COUNT(*) FROM intents WHERE day = ? GROUP BY reason", arrayOf(day)).use {
             while (it.moveToNext()) intents[it.getString(0)] = it.getInt(1)
         }
+        if (watched == 0 && skimmed == 0 && ads == 0 && ms == 0L) importedSummary(day)?.let { return it }
         return mapOf(
             "day" to day, "watched" to watched, "skimmed" to skimmed, "ads" to ads, "ms" to ms,
             "unlocks" to unlocks, "apps" to apps.values.toList(), "hours" to hours.toList(), "intents" to intents,
         )
+    }
+
+    // ---------------------------------------------------------------- cloud backup
+
+    /** Every day that has anything recorded, here or restored. */
+    fun daysWithData(): List<String> {
+        val out = sortedSetOf<String>()
+        readableDatabase.rawQuery("SELECT DISTINCT day FROM events UNION SELECT DISTINCT day FROM time_spent UNION SELECT day FROM imported_days", null).use {
+            while (it.moveToNext()) out.add(it.getString(0))
+        }
+        return out.toList()
+    }
+
+    private fun daysWithoutEvents(days: List<String>): List<String> {
+        if (days.isEmpty()) return emptyList()
+        val marks = days.joinToString(",") { "?" }
+        val withEvents = HashSet<String>()
+        readableDatabase.rawQuery("SELECT DISTINCT day FROM events WHERE day IN ($marks)", days.toTypedArray()).use {
+            while (it.moveToNext()) withEvents.add(it.getString(0))
+        }
+        return days.filter { it !in withEvents }
+    }
+
+    fun importedSummary(day: String): Map<String, Any>? =
+        readableDatabase.rawQuery("SELECT json FROM imported_days WHERE day = ?", arrayOf(day)).use {
+            if (it.moveToFirst()) jsonToMap(JSONObject(it.getString(0))) else null
+        }
+
+    /** Saves day summaries from cloud backup (a JSON array of daySummary maps). Returns how many. */
+    fun importSummaries(json: String): Int {
+        val list = JSONArray(json)
+        val w = writableDatabase
+        w.beginTransaction()
+        try {
+            for (i in 0 until list.length()) {
+                val o = list.getJSONObject(i)
+                w.execSQL("INSERT OR REPLACE INTO imported_days(day, json) VALUES(?, ?)", arrayOf<Any>(o.getString("day"), o.toString()))
+            }
+            w.setTransactionSuccessful()
+        } finally {
+            w.endTransaction()
+        }
+        return list.length()
+    }
+
+    private fun jsonToMap(o: JSONObject): Map<String, Any> {
+        val out = LinkedHashMap<String, Any>()
+        for (k in o.keys()) out[k] = jsonValue(o.get(k)) ?: continue
+        return out
+    }
+
+    private fun jsonValue(v: Any?): Any? = when (v) {
+        is JSONObject -> jsonToMap(v)
+        is JSONArray -> (0 until v.length()).mapNotNull { jsonValue(v.get(it)) }
+        JSONObject.NULL -> null
+        is Long -> if (v in Int.MIN_VALUE..Int.MAX_VALUE) v.toInt() else v
+        else -> v
     }
 
     /**
@@ -166,6 +232,12 @@ class Db private constructor(context: Context) :
                 heat[weekday * 24 + hour]++
                 firstReel.putIfAbsent(it.getString(0), hour * 60 + cal.get(Calendar.MINUTE))
             }
+        }
+        for (d in daysWithoutEvents(days)) {
+            val hours = importedSummary(d)?.get("hours") as? List<*> ?: continue
+            cal.time = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(d)!!
+            val weekday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+            hours.forEachIndexed { h, n -> if (h < 24) heat[weekday * 24 + h] += (n as? Number)?.toInt() ?: 0 }
         }
         val intents = HashMap<String, Int>()
         r.rawQuery("SELECT reason, COUNT(*) FROM intents WHERE day IN ($marks) GROUP BY reason", days.toTypedArray()).use {
@@ -260,7 +332,7 @@ class Db private constructor(context: Context) :
     }
 
     companion object {
-        private val TABLES = listOf("events", "time_spent", "unlocks", "intents")
+        private val TABLES = listOf("events", "time_spent", "unlocks", "intents", "imported_days")
 
         @Volatile private var instance: Db? = null
         fun get(context: Context): Db = instance ?: synchronized(this) {

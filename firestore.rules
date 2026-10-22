@@ -32,6 +32,20 @@ service cloud.firestore {
                 && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 24));
     }
 
+    // Cloud backup: day summaries and settings. Only the owner, and only with a Google account
+    // (guest accounts can't be signed into on another phone, so they have nothing to restore to).
+    function ownGoogleAccount(uid) {
+      return signedIn() && request.auth.uid == uid && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    match /users/{uid}/days/{day} {
+      allow read, write: if ownGoogleAccount(uid);
+    }
+
+    match /users/{uid}/backup/{doc} {
+      allow read, write: if ownGoogleAccount(uid);
+    }
+
     // Invite code -> squad id. Anyone signed in can look a code up (that's how joining works).
     match /codes/{code} {
       allow read: if signedIn();
