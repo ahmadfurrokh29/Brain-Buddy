@@ -50,3 +50,11 @@ app.*.map.json
 # Firebase CLI
 firebase-debug.log
 .firebase/
+
+# Nudge Worker build files
+worker/node_modules/
+worker/.wrangler/
+# Never commit Firebase service-account keys
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json

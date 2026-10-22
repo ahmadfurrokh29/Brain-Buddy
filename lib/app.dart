@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+
+import 'core/nudges.dart';
 import 'core/providers.dart';
 import 'core/squads.dart';
 import 'features/doctor/doctor_screen.dart';
@@ -61,9 +64,18 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
     ref.listenManual(authUserProvider, (prev, next) {
       if (next.value != null && prev?.value?.uid != next.value!.uid) {
         ref.read(squadsRepoProvider).refreshSync().catchError((_) {});
+        registerPushToken().catchError((_) {});
       }
     }, fireImmediately: true);
+    // A nudge while Brain Buddy is open: Android only shows pushes automatically in the background.
+    FirebaseMessaging.onMessage.listen((m) {
+      final n = m.notification;
+      if (n == null) return;
+      _messenger.currentState?.showSnackBar(SnackBar(content: Text('${n.title ?? ''}\n${n.body ?? ''}')));
+    });
   }
+
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
 
   @override
   void dispose() {
@@ -80,6 +92,7 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
       darkTheme: AppTheme.dark(),
       themeMode: ref.watch(themeModeProvider),
       routerConfig: _router,
+      scaffoldMessengerKey: _messenger,
     );
   }
 }

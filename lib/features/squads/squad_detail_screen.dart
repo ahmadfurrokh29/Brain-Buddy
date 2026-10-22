@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/nudges.dart';
 import '../../core/providers.dart';
 import '../../core/squads.dart';
 import '../../theme/app_theme.dart';
@@ -132,6 +133,7 @@ class _Board extends ConsumerWidget {
                 isMe: ranked[i].uid == myUid,
                 canRemove: squad.ownerUid == myUid && ranked[i].uid != myUid,
                 onRemove: () => ref.read(squadsRepoProvider).removeMember(squad, ranked[i].uid),
+                onNudge: ranked[i].uid == myUid || !nudgesAvailable ? null : () => _nudge(context, squad.id, ranked[i]),
               ),
           ]),
         ),
@@ -174,6 +176,17 @@ class _Board extends ConsumerWidget {
   }
 }
 
+Future<void> _nudge(BuildContext context, String squadId, SquadMember m) async {
+  final (result, minutes) = await sendNudge(squadId, m.uid);
+  if (!context.mounted) return;
+  showSnack(context, switch (result) {
+    NudgeResult.sent => 'Nudge sent to ${m.name} 👋',
+    NudgeResult.tooSoon => 'You nudged ${m.name} recently. Try again in ${minutes >= 60 ? '${(minutes / 60).ceil()} h' : '$minutes min'}.',
+    NudgeResult.friendHasNoNotifications => '${m.name} has notifications turned off.',
+    NudgeResult.failed => 'Could not send the nudge. Check your internet.',
+  });
+}
+
 class _MemberRow extends StatelessWidget {
   final int rank;
   final SquadMember m;
@@ -181,7 +194,9 @@ class _MemberRow extends StatelessWidget {
   final bool isMe;
   final bool canRemove;
   final VoidCallback onRemove;
+  final VoidCallback? onNudge;
   const _MemberRow({
+    this.onNudge,
     required this.rank,
     required this.m,
     required this.synced,
@@ -208,7 +223,11 @@ class _MemberRow extends StatelessWidget {
       ),
       title: Text('${m.name}${isMe ? ' (you)' : ''}', style: TextStyle(fontWeight: isMe ? FontWeight.w900 : FontWeight.w700)),
       subtitle: Text(synced ? 'Today ${m.todayWatched} · $ago' : 'No reels counted this week yet'),
-      trailing: Text(synced ? '${m.weekWatched}' : '–', style: Theme.of(context).textTheme.titleLarge),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(synced ? '${m.weekWatched}' : '–', style: Theme.of(context).textTheme.titleLarge),
+        if (onNudge != null)
+          IconButton(tooltip: 'Nudge ${m.name}', onPressed: onNudge, icon: const Text('👋', style: TextStyle(fontSize: 20))),
+      ]),
     );
   }
 

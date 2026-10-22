@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'native_bridge.dart';
+import 'nudges.dart';
 import 'providers.dart';
 
 /// Max people per Squad (also enforced by the Firestore rules).
@@ -253,6 +254,8 @@ class SquadsRepo {
   Future<void> rename(Squad s, String name) => db.collection('squads').doc(s.id).update({'name': name});
 
   Future<void> signOut() async {
+    final uid = user?.uid;
+    if (uid != null) await forgetPushToken(uid);
     await bridge.setConfigRaw({'squadIds': <String>[]});
     await auth.signOut();
     try {
@@ -304,6 +307,7 @@ class SquadsRepo {
       await userDoc.collection('backup').doc('settings').delete();
     }
     await db.collection('users').doc(uid).delete();
+    await forgetPushToken(uid);
     await bridge.setConfigRaw({'squadIds': <String>[]});
     await user!.delete();
   }

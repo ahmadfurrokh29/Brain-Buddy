@@ -7,5 +7,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         NativeBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        com.brainbuddy.app.service.Notifier.ensureNudgeChannel(this)
     }
 }

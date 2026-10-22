@@ -46,6 +46,15 @@ service cloud.firestore {
       allow read, write: if ownGoogleAccount(uid);
     }
 
+    // Push address for friend nudges. Each user writes only their own; no app can read anyone's.
+    // Only the nudge Worker (with the service account) reads them. "nudges" (rate limits) has no client access.
+    match /fcmTokens/{uid} {
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+        && request.resource.data.token is string && request.resource.data.token.size() < 4096;
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
     // Invite code -> squad id. Anyone signed in can look a code up (that's how joining works).
     match /codes/{code} {
       allow read: if signedIn();

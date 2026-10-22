@@ -18,6 +18,7 @@ class Notifier(private val ctx: Context, private val config: Config) {
         val channel = NotificationChannel(CHANNEL, "Reel budget warnings", NotificationManager.IMPORTANCE_DEFAULT)
         channel.description = "Tells you when you are close to your daily reel budget"
         ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        ensureNudgeChannel(ctx)
     }
 
     fun onCount(watched: Int, allowance: Int) {
@@ -56,5 +57,14 @@ class Notifier(private val ctx: Context, private val config: Config) {
         try { nm.notify(title.hashCode(), n) } catch (_: SecurityException) {}
     }
 
-    companion object { private const val CHANNEL = "budget" }
+    companion object {
+        private const val CHANNEL = "budget"
+
+        /** Channel for friend nudges sent through Firebase Cloud Messaging (the Worker targets "nudges"). */
+        fun ensureNudgeChannel(ctx: Context) {
+            val channel = NotificationChannel("nudges", "Friend nudges", NotificationManager.IMPORTANCE_HIGH)
+            channel.description = "When a squad friend nudges you to put the reels down"
+            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
 }

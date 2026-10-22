@@ -1,0 +1,8 @@
+# Brain Buddy nudge sender. Deploy: npx wrangler deploy (from this folder).
+# Secret (never committed): npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
+name = "brain-buddy-nudge"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "brain-buddy-ed84a"
