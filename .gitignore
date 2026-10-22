@@ -46,3 +46,7 @@ app.*.map.json
 
 # Private planning docs
 *.pdf
+
+# Firebase CLI
+firebase-debug.log
+.firebase/
