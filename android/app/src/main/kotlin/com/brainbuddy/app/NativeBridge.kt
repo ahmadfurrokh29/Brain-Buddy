@@ -60,6 +60,8 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
     private fun handle(call: MethodCall): Any? = when (call.method) {
         "getConfig" -> {
             config.settleFocus()
+            // Same rule as the counter: earned reels that lift the limit also lift a budget Hard lock.
+            if (config.isHardLocked() && db.watchedCount(config.today()) < config.allowanceToday()) config.hardLockedUntil = 0
             config.toMap()
         }
         "startFocus" -> {

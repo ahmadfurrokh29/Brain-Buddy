@@ -412,6 +412,12 @@ class ReelCounterService : AccessibilityService() {
             return true
         }
         endExpiredHardLock(now)
+        // A budget Hard lock only makes sense while the budget is used up. Reels earned by walking or
+        // focusing (or any extra) can raise the limit after the lock started: then the lock lifts.
+        if (config.isHardLocked(now) && db.watchedCount(day) < config.allowanceToday()) {
+            config.hardLockedUntil = 0
+            db.insertUnlock(day, "hard_lifted_by_earned")
+        }
         if (config.isHardLocked(now)) {
             showHardLock()
             return true
@@ -485,7 +491,7 @@ class ReelCounterService : AccessibilityService() {
         val whenText = if (config.today(until - 1) == config.today()) "until $time" else "until $time tomorrow"
         overlays.showHardLock(
             "$name reels are locked",
-            "You reached your $name limit. Its reels open again $whenText. Other apps, messages and stories still work.",
+            "You reached your $name limit. Its reels stay locked $whenText. Other apps, messages and stories still work.",
             config.emergencyLeft(),
             onClose = { safe("lockClose") { goHome() } },
             onEmergency = {
@@ -510,7 +516,7 @@ class ReelCounterService : AccessibilityService() {
         val whenText = if (config.today(until - 1) == config.today()) "until $time" else "until $time tomorrow"
         overlays.showHardLock(
             "Reels are locked",
-            "You reached your reel limit. Reels open again $whenText. Messages and stories still work.",
+            "You reached your reel limit. Reels stay locked $whenText. Messages and stories still work.",
             config.emergencyLeft(),
             onClose = { safe("lockClose") { goHome() } },
             onEmergency = {
@@ -539,7 +545,7 @@ class ReelCounterService : AccessibilityService() {
         safe("focusEnd") {
             val earned = config.settleFocus()
             if (earned > 0) notifier.earned(earned, "focusing")
-            if (overlays.isLockShowing && !config.isFocusing()) overlays.hideLock()
+            if (overlays.isLockShowing && !config.isFocusing()) recheckLock()
             CountBus.emit()
         }
     }
@@ -569,6 +575,7 @@ class ReelCounterService : AccessibilityService() {
                             notifier.earned(earned, "walking")
                             if (reelsPkg != null && config.floatingCounter) overlays.updateCounter(db.watchedCount(day), config.allowanceToday())
                             BrainWidgetProvider.refresh(this@ReelCounterService)
+                            if (overlays.isLockShowing) recheckLock()
                         }
                         CountBus.emit()
                     }
@@ -600,6 +607,12 @@ class ReelCounterService : AccessibilityService() {
                 }
             },
         )
+    }
+
+    /** Earned reels may have lifted the limit: take the lock down and show it again only if still needed. */
+    private fun recheckLock() {
+        overlays.hideLock()
+        if (reelsPkg != null) enforceLimits()
     }
 
     /** A 1 h / 3 h Hard lock that ended during the same day gives 5 more reels, then locks again at the new limit. */
