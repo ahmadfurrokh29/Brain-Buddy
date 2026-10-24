@@ -1,6 +1,11 @@
 package com.brainbuddy.app.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.content.pm.ApplicationInfo
 import android.graphics.Rect
 import android.hardware.Sensor
@@ -112,7 +117,64 @@ class ReelCounterService : AccessibilityService() {
         instance = this
         lastEventAt = System.currentTimeMillis()
         main.post(tick)
+        registerSystemEvents()
         CountBus.emit()
+    }
+
+    /**
+     * Home, Recents and the power button. Brain Buddy only gets events from the reel apps, so without
+     * these it noticed the user had left only seconds later, and the lock stayed on top of the home screen.
+     */
+    private val systemEvents = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = safe("systemEvent") {
+            when (intent.action) {
+                Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> {
+                    val reason = intent.getStringExtra("reason")
+                    log("system dialogs closed: $reason")
+                    if (reason == "homekey" || reason == "recentapps") {
+                        // One press of Home closes the reel app and the lock together.
+                        if (reelsPkg != null) leaveOnPurpose()
+                    }
+                }
+                // Turning the screen off on a lock: go home, so the reel doesn't start playing again
+                // behind the lock when the screen comes back on.
+                Intent.ACTION_SCREEN_OFF -> {
+                    // The lock may already be gone: the every-second check closes it as soon as the
+                    // screen goes dark, which can be just before this message arrives.
+                    val showing = overlays.isLockShowing || overlays.isIntentShowing
+                    if (showing || System.currentTimeMillis() - lockLeftAt < 5000) {
+                        if (showing) goHome()
+                        // While the phone goes to sleep Android ignores Home, so the reel app is still on top
+                        // behind the lock screen. Send it home the moment the phone is unlocked instead.
+                        homeOnUnlock = true
+                    }
+                }
+                Intent.ACTION_USER_PRESENT -> {
+                    if (homeOnUnlock) {
+                        homeOnUnlock = false
+                        log("unlocked after a lock: going home")
+                        // Ignore the reel app while it animates away, so its lock doesn't flash up again.
+                        leftPkg = lockLeftPkg
+                        leftAt = System.currentTimeMillis()
+                        pauseMedia()
+                        performGlobalAction(GLOBAL_ACTION_HOME)
+                    }
+                }
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun registerSystemEvents() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(systemEvents, filter, Context.RECEIVER_EXPORTED)
+            else registerReceiver(systemEvents, filter)
+        } catch (_: Exception) {}
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) = safe("event") { onEvent(event) }
@@ -159,6 +221,7 @@ class ReelCounterService : AccessibilityService() {
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
+        try { unregisterReceiver(systemEvents) } catch (_: Exception) {}
         stepListener?.let { getSystemService(SensorManager::class.java)?.unregisterListener(it) }
         stepListener = null
         if (::overlays.isInitialized) overlays.hideAll()
@@ -173,7 +236,7 @@ class ReelCounterService : AccessibilityService() {
     private fun evaluate() {
         val root = rootInActiveWindow ?: return
         val pkg = root.packageName?.toString()
-        // Our own Firm-lock pop-up takes focus for typing; that isn't leaving the reels app.
+        // Our reason screen (Firm lock) is in front for a moment; that isn't leaving the reels app.
         if (pkg == packageName) return
         val app = TargetApps.find(pkg)
         if (app == null || !config.isTracked(app.pkg) || config.isPaused()) {
@@ -190,7 +253,16 @@ class ReelCounterService : AccessibilityService() {
             pendingScroll = false
             return
         }
-        if (reelsPkg != app.pkg) enterReels(app.pkg)
+        if (reelsPkg != app.pkg) {
+            // Just left this app with Home or "Close app": while it animates away it still looks open.
+            // Entering it again here is what made the lock flash back for a moment.
+            val sinceLeft = System.currentTimeMillis() - leftAt
+            if (app.pkg == leftPkg && sinceLeft < LEAVE_GRACE_MS) {
+                scheduleEvaluate(LEAVE_GRACE_MS - sinceLeft + 50)
+                return
+            }
+            enterReels(app.pkg)
+        }
 
         // Mid-swipe the screen shows two half reels. Wait until the swipe has settled.
         val now = System.currentTimeMillis()
@@ -389,6 +461,10 @@ class ReelCounterService : AccessibilityService() {
         finishReel()
         main.removeCallbacks(watchCheck)
         flushTime()
+        if (overlays.isLockShowing || overlays.isIntentShowing) {
+            lockLeftAt = System.currentTimeMillis()
+            lockLeftPkg = reelsPkg
+        }
         reelsPkg = null
         overlays.hideAll()
     }
@@ -430,7 +506,7 @@ class ReelCounterService : AccessibilityService() {
             "firm" -> overlays.showFirmLock(
                 watched, allowance, config.firmWaitLeft(FIRM_WAIT_SEC),
                 onClose = { safe("lockClose") { goHome() } },
-                onUnlock = { reason -> safe("firmUnlock") { config.firmReadyAt = 0; allowMore(5, "firm", reason) } },
+                onAskReason = { askReason { reason -> config.firmReadyAt = 0; allowMore(5, "firm", reason) } },
             )
             "hard" -> {
                 config.startHardLock(now)
@@ -469,7 +545,7 @@ class ReelCounterService : AccessibilityService() {
             "firm" -> overlays.showFirmLock(
                 appWatched, appAllowance, config.firmWaitLeft(FIRM_WAIT_SEC), appName = name,
                 onClose = { safe("lockClose") { goHome() } },
-                onUnlock = { reason -> safe("appFirm") { config.firmReadyAt = 0; allowMoreInApp(pkg, 5, "app_firm", reason) } },
+                onAskReason = { askReason { reason -> config.firmReadyAt = 0; allowMoreInApp(pkg, 5, "app_firm", reason) } },
             )
             "hard" -> {
                 config.startAppHardLock(pkg, now)
@@ -630,10 +706,69 @@ class ReelCounterService : AccessibilityService() {
         CountBus.emit()
     }
 
+    // ---------------------------------------------------------------- Firm lock reason screen
+
+    /** What "Unlock 5 reels" on the reason screen does (the whole budget or one app's). */
+    private var onReason: ((String) -> Unit)? = null
+
+    private fun askReason(onUnlock: (String) -> Unit) = safe("askReason") {
+        onReason = onUnlock
+        overlays.hideCounter() // it would sit on top of the reason screen
+        startActivity(Intent(this, ReasonActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** The reason screen's answer: a reason that unlocks 5 reels. */
+    fun reasonGiven(reason: String) = safe("reasonGiven") {
+        onReason?.invoke(reason)
+        onReason = null
+        if (reelsPkg != null && config.floatingCounter) overlays.showCounter(db.watchedCount(day), config.allowanceToday())
+    }
+
+    /** "Close app" on the reason screen. */
+    fun reasonClose() = safe("reasonClose") {
+        onReason = null
+        goHome()
+    }
+
+    /**
+     * Back (or leaving) on the reason screen: forget the reels screen, so coming back to it locks it again
+     * straight away instead of at the next check.
+     */
+    fun reasonDismissed() = safe("reasonDismissed") {
+        onReason = null
+        if (reelsPkg != null) leaveReels()
+    }
+
     private fun goHome() {
-        leaveReels()
+        leaveOnPurpose()
         performGlobalAction(GLOBAL_ACTION_HOME)
     }
+
+    /** The user left the reels (Home, "Close app", screen off): don't re-enter that app while it closes. */
+    private fun leaveOnPurpose() {
+        leftPkg = reelsPkg ?: leftPkg
+        leftAt = System.currentTimeMillis()
+        leaveReels()
+    }
+
+    /** The screen went off on a lock: go home as soon as the phone is unlocked. */
+    private var homeOnUnlock = false
+
+    /** When a lock (or the intent pause) was last taken down because the user left the reels. */
+    private var lockLeftAt = 0L
+    private var lockLeftPkg: String? = null
+
+    /** Sends "pause" to whatever is playing, so the reel doesn't play out loud for a moment. */
+    private fun pauseMedia() {
+        try {
+            val audio = getSystemService(android.media.AudioManager::class.java)
+            audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audio.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE))
+        } catch (_: Exception) {}
+    }
+
+    private var leftPkg: String? = null
+    private var leftAt = 0L
 
     // ---------------------------------------------------------------- every second
 
@@ -641,15 +776,17 @@ class ReelCounterService : AccessibilityService() {
         val pkg = reelsPkg ?: return
         val now = System.currentTimeMillis()
         val activePkg = rootInActiveWindow?.packageName?.toString()
-        if (activePkg == packageName) return // our Firm-lock pop-up has focus
-        if (activePkg != null && activePkg != pkg) {
+        if (activePkg != null && activePkg != pkg && activePkg != packageName) {
             if (!evalScheduled) { evalScheduled = true; main.post(evaluateRunnable) }
             return
         }
-        if (activePkg == null && now - lastEventAt > 8000) {
+        // While a lock is up the reel app sends almost no events, so "no window" means the user left.
+        val goneAfter = if (overlays.isLockShowing) 2000 else 8000
+        if (activePkg == null && now - lastEventAt > goneAfter) {
             leaveReels()
             return
         }
+        if (activePkg == packageName) return // our reason screen (Firm lock) is in front
         if (config.isPaused()) { leaveReels(); return }
         unsavedMs += 1000
         if (unsavedMs >= 5000) flushTime()
@@ -690,6 +827,7 @@ class ReelCounterService : AccessibilityService() {
     companion object {
         private const val INTENT_COOLDOWN_MS = 10 * 60 * 1000L
         private const val FIRM_WAIT_SEC = 60
+        private const val LEAVE_GRACE_MS = 2500L
         private const val EMERGENCY_REELS = 10
         /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
         private const val SETTLE_MS = 400L

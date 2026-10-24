@@ -54,6 +54,17 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Firm lock: "Why do you want more reels?". Its own task, so finishing it returns to the reel app. -->
+        <activity
+            android:name=".service.ReasonActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.brainbuddy.app.reason"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
+
         <!-- Home-screen widget. -->
         <receiver
             android:name=".widget.BrainWidgetProvider"

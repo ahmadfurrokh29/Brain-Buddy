@@ -22,11 +22,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -159,57 +154,37 @@ class Overlays(private val ctx: Context) {
         if (lock != null) return
         val (root, actions) = lockScreen(Mood.MELTED, "Time for a brain break", limitMessage(watched, budget, appName), breathing = true)
         actions.addView(button("Close app", primary = true) { hideLock(); onClose() })
-        actions.addView(button("5 more reels", primary = false) { hideLock(); onMore() }.withTop(8))
-        if (!add(root, lockParams(focusable = false))) return
+        actions.addView(button("5 more reels", primary = false) { gentleReadyAt = 0; hideLock(); onMore() }.withTop(8))
+        if (!add(root, lockParams())) return
         lock = root
         quietMedia()
-        // One full breath before the buttons appear.
-        revealLater(actions, 8000)
+        // One full breath before the buttons appear. Leaving and coming back doesn't start the breath over.
+        val now = System.currentTimeMillis()
+        if (gentleReadyAt == 0L || now - gentleReadyAt > GENTLE_FORGET_MS) gentleReadyAt = now + GENTLE_BREATH_MS
+        val wait = gentleReadyAt - now
+        if (wait <= 0) actions.visibility = View.VISIBLE else revealLater(actions, wait)
     }
 
-    /** Firm lock: wait [waitSec] seconds, then type why you want more reels to unlock 5. */
-    fun showFirmLock(watched: Int, budget: Int, waitSec: Int, appName: String? = null, onClose: () -> Unit, onUnlock: (String) -> Unit) {
-        if (lock != null) return
-        val (root, actions) = lockScreen(Mood.MELTED, "Reel limit reached", limitMessage(watched, budget, appName), breathing = true)
-        val countdown = text("", 15f, color = GREY)
-        val reason = EditText(ctx).apply {
-            hint = "Why do you want more reels?"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(INK)
-            setHintTextColor(GREY)
-            minWidth = dp(260)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(Color.WHITE); setStroke(dp(1), MINT) }
-            visibility = View.GONE
-        }
-        val unlock = button("Unlock 5 reels", primary = false) {
-            val typed = reason.text.toString().trim()
-            if (typed.length >= MIN_REASON) { hideLock(); onUnlock(typed) }
-        }.apply { alpha = 0.4f; visibility = View.GONE }
-        reason.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(e: Editable?) { unlock.alpha = if ((e?.trim()?.length ?: 0) >= MIN_REASON) 1f else 0.4f }
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-        })
-        reason.apply {
-            isSingleLine = true
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            setOnEditorActionListener { v, _, _ -> hideKeyboard(v); true }
-        }
-        val close = button("Close app", primary = true) { hideKeyboard(reason); hideLock(); onClose() }
-        actions.addView(countdown)
-        actions.addView(reason.withTop(8))
-        actions.addView(unlock.withTop(10))
-        actions.addView(close.withTop(10))
-        actions.visibility = View.VISIBLE
+    /** When the current Gentle lock's buttons appear (0 = no Gentle lock started). */
+    private var gentleReadyAt = 0L
 
-        // Back works like "Close app", so the lock can never trap the user.
-        root.onBack = { hideKeyboard(reason); hideLock(); onClose() }
-        // Focusable so the keyboard can type the reason; the screen pans so the box and buttons stay visible.
-        val lp = lockParams(focusable = true).apply {
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-        }
-        if (!add(root, lp)) return
+    /**
+     * Firm lock: wait [waitSec] seconds, then "Write a reason for 5 more" opens Brain Buddy's reason screen
+     * ([onAskReason]). Typing happens there, in a normal app screen, because Samsung phones draw the navigation
+     * buttons invisible when a pop-up like this one has the keyboard.
+     */
+    fun showFirmLock(watched: Int, budget: Int, waitSec: Int, appName: String? = null, onClose: () -> Unit, onAskReason: () -> Unit) {
+        if (lock != null) return
+        val parts = lockScreen(Mood.MELTED, "Reel limit reached", limitMessage(watched, budget, appName), breathing = true)
+        val (root, actions) = parts
+        val countdown = text("", 15f, color = GREY)
+        val ask = button("Write a reason for 5 more", primary = false) { hideLock(); onAskReason() }
+            .apply { visibility = View.GONE }
+        actions.addView(countdown.withTop(12))
+        actions.addView(ask.withTop(10))
+        actions.addView(button("Close app", primary = true) { hideLock(); onClose() }.withTop(10))
+        actions.visibility = View.VISIBLE
+        if (!add(root, lockParams())) return
         lock = root
         quietMedia()
 
@@ -222,9 +197,10 @@ class Overlays(private val ctx: Context) {
                     left--
                     main.postDelayed(this, 1000)
                 } else {
-                    countdown.text = "Type at least $MIN_REASON characters to unlock 5 more reels."
-                    reason.visibility = View.VISIBLE
-                    unlock.visibility = View.VISIBLE
+                    // The breathing circle is only for the wait; afterwards the buttons need the room.
+                    parts.breath?.visibility = View.GONE
+                    countdown.text = "Still want more? Tell yourself why."
+                    ask.visibility = View.VISIBLE
                 }
             }
         }
@@ -239,10 +215,10 @@ class Overlays(private val ctx: Context) {
         if (onEmergency != null && emergencyLeft > 0) {
             var armed = false
             lateinit var emergency: TextView
-            emergency = button("Emergency unlock ($emergencyLeft left this week)", primary = false) {
+            emergency = button("Emergency unlock ($emergencyLeft left)", primary = false) {
                 if (!armed) {
                     armed = true
-                    emergency.text = "Tap again to use it. This can't be undone."
+                    emergency.text = "Tap again to confirm"
                     emergency.setTextColor(CORAL)
                 } else {
                     hideLock(); onEmergency()
@@ -251,7 +227,7 @@ class Overlays(private val ctx: Context) {
             actions.addView(emergency.withTop(10))
         }
         actions.visibility = View.VISIBLE
-        if (!add(root, lockParams(focusable = false))) return
+        if (!add(root, lockParams())) return
         lock = root
         quietMedia()
     }
@@ -297,16 +273,17 @@ class Overlays(private val ctx: Context) {
         focusRequest = null
     }
 
-    private fun hideKeyboard(v: View) {
-        ctx.getSystemService(InputMethodManager::class.java)?.hideSoftInputFromWindow(v.windowToken, 0)
-    }
-
     /** Shared layout for all lock screens: brain, title, message, optional breathing circle, actions area. */
-    private fun lockScreen(mood: Mood, title: String, message: String, breathing: Boolean): Pair<LockLayout, LinearLayout> {
+    private data class LockParts(val root: LinearLayout, val actions: LinearLayout, val brain: View, val message: View, val breath: View?)
+
+    private fun lockScreen(mood: Mood, title: String, message: String, breathing: Boolean): LockParts {
         val root = column(MINT_LIGHT)
-        root.addView(BrainView(ctx).apply { this.mood = mood }, LinearLayout.LayoutParams(dp(120), dp(120)))
+        val brain = BrainView(ctx).apply { this.mood = mood }
+        root.addView(brain, LinearLayout.LayoutParams(dp(120), dp(120)))
         root.addView(text(title, 26f, bold = true).withTop(12))
-        root.addView(text(message, 16f, color = GREY).withTop(8))
+        val messageView = text(message, 16f, color = GREY).withTop(8)
+        root.addView(messageView)
+        var breath: View? = null
         if (breathing) {
             val circleBox = FrameLayout(ctx)
             val circle = View(ctx).apply {
@@ -318,6 +295,7 @@ class Overlays(private val ctx: Context) {
             circleBox.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             root.addView(circleBox, LinearLayout.LayoutParams(dp(170), dp(170)).apply { topMargin = dp(20); bottomMargin = dp(20) })
             startBreathing(circle, label)
+            breath = circleBox
         } else {
             root.addView(View(ctx), LinearLayout.LayoutParams(1, dp(36)))
         }
@@ -327,7 +305,7 @@ class Overlays(private val ctx: Context) {
             visibility = View.INVISIBLE
         }
         root.addView(actions)
-        return root to actions
+        return LockParts(root, actions, brain, messageView, breath)
     }
 
     private fun startBreathing(circle: View, label: TextView) {
@@ -378,7 +356,7 @@ class Overlays(private val ctx: Context) {
         buttons.addView(button("Close app", primary = true) { hideIntent(); onClose() }.withTop(18))
         root.addView(buttons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(28) })
 
-        if (!add(root, lockParams(focusable = false))) return
+        if (!add(root, lockParams())) return
         intent = root
         main.postDelayed({ buttons.visibility = View.VISIBLE; buttons.alpha = 0f; buttons.animate().alpha(1f).start() }, waitSec * 1000L)
     }
@@ -392,14 +370,11 @@ class Overlays(private val ctx: Context) {
 
     // ---------------------------------------------------------------- helpers
 
-    /**
-     * Full-screen pop-up that stops above the navigation bar, so Back and Home always stay usable.
-     * [focusable] is only for the Firm lock, which needs the keyboard.
-     */
-    private fun lockParams(focusable: Boolean) = WindowManager.LayoutParams(
+    /** Full-screen pop-up that stops above the navigation bar, so Back and Home always stay usable. */
+    private fun lockParams() = WindowManager.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        if (focusable) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
         PixelFormat.TRANSLUCENT,
     )
 
@@ -417,24 +392,14 @@ class Overlays(private val ctx: Context) {
         try { wm.removeView(v) } catch (_: Exception) {}
     }
 
-    /** Pop-up root that turns the Back key into an action (only reachable when the window has focus). */
-    private class LockLayout(context: Context) : LinearLayout(context) {
-        var onBack: (() -> Unit)? = null
-        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-            if (event.keyCode == KeyEvent.KEYCODE_BACK && onBack != null) {
-                if (event.action == KeyEvent.ACTION_UP) onBack?.invoke()
-                return true
-            }
-            return super.dispatchKeyEvent(event)
-        }
-    }
-
-    private fun column(bg: Int) = LockLayout(ctx).apply {
+    private fun column(bg: Int) = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
         setBackgroundColor(bg)
         setPadding(dp(28), dp(48), dp(28), dp(48))
         isClickable = true // swallow touches so the reel underneath can't be scrolled
+        // After a key press (Back, Home) Android otherwise greys out the whole screen as a "focus" highlight.
+        defaultFocusHighlightEnabled = false
     }
 
     private fun text(s: String, sp: Float, bold: Boolean = false, color: Int = INK) = TextView(ctx).apply {
@@ -459,6 +424,7 @@ class Overlays(private val ctx: Context) {
             setTextColor(INK)
             background = pill(Color.WHITE)
         }
+        defaultFocusHighlightEnabled = false
         setOnClickListener { onClick() }
     }
 
@@ -481,6 +447,7 @@ class Overlays(private val ctx: Context) {
         val CORAL = Color.parseColor("#FF6B6B")
         val INK = Color.parseColor("#1B2430")
         val GREY = Color.parseColor("#5B6573")
-        private const val MIN_REASON = 10
+        private const val GENTLE_BREATH_MS = 8000L
+        private const val GENTLE_FORGET_MS = 30 * 60 * 1000L
     }
 }
