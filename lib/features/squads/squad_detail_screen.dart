@@ -176,12 +176,25 @@ class _Board extends ConsumerWidget {
   }
 }
 
+/// Friends with a nudge on its way, so a double tap doesn't send two.
+final _sending = <String>{};
+
 Future<void> _nudge(BuildContext context, String squadId, SquadMember m) async {
-  final (result, minutes) = await sendNudge(squadId, m.uid);
+  if (!_sending.add(m.uid)) return;
+  // Answer the tap straight away; the push itself takes a second or two.
+  showSnack(context, 'Sending a nudge to ${m.name}…');
+  final (NudgeResult, int) out;
+  try {
+    out = await sendNudge(squadId, m.uid);
+  } finally {
+    _sending.remove(m.uid);
+  }
+  final (result, minutes) = out;
   if (!context.mounted) return;
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
   showSnack(context, switch (result) {
     NudgeResult.sent => 'Nudge sent to ${m.name} 👋',
-    NudgeResult.tooSoon => 'You nudged ${m.name} recently. Try again in ${minutes >= 60 ? '${(minutes / 60).ceil()} h' : '$minutes min'}.',
+    NudgeResult.tooSoon => 'You can nudge ${m.name} 3 times an hour. Try again in $minutes min.',
     NudgeResult.friendHasNoNotifications => '${m.name} has notifications turned off.',
     NudgeResult.failed => 'Could not send the nudge. Check your internet.',
   });

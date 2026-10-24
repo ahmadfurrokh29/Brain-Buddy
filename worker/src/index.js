@@ -4,52 +4,67 @@
 //
 // 1. Verifies the caller's Firebase sign-in (so nobody can send nudges without an account).
 // 2. Checks caller and friend are in the same squad.
-// 3. Allows one nudge per person pair every 6 hours.
-// 4. Sends the push through Firebase Cloud Messaging.
+// 3. Allows 3 nudges per person pair per hour.
+// 4. Sends the push through Firebase Cloud Messaging. It has a notification part, so Android shows it
+//    even when Brain Buddy is closed; when the app is open, the app shows it itself.
 //
 // The Firebase service-account key lives only here, as the secret FIREBASE_SERVICE_ACCOUNT.
 
-const NUDGE_GAP_MS = 6 * 60 * 60 * 1000;
+const NUDGES_PER_WINDOW = 3;
+const WINDOW_MS = 60 * 60 * 1000;
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/nudge') {
       return json({ error: 'not found' }, 404);
     }
     try {
       const projectId = env.FIREBASE_PROJECT_ID;
-      const fromUid = await verifyIdToken(request.headers.get('Authorization'), projectId);
+      const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+      // Checking the sign-in and getting Google's access token don't depend on each other: do both at once.
+      const [fromUid, token, body] = await Promise.all([
+        verifyIdToken(request.headers.get('Authorization'), projectId),
+        accessToken(sa),
+        request.json().catch(() => ({})),
+      ]);
       if (!fromUid) return json({ error: 'not signed in' }, 401);
 
-      const { squadId, toUid } = await request.json();
+      const { squadId, toUid } = body;
       if (typeof squadId !== 'string' || typeof toUid !== 'string' || toUid === fromUid) {
         return json({ error: 'bad request' }, 400);
       }
 
-      const sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
-      const token = await accessToken(sa);
       const fs = (path) => `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
       const auth = { Authorization: `Bearer ${token}` };
+      const pairPath = `nudges/${fromUid}_${toUid}`;
+
+      // All four reads at once (they used to run one after another, which made nudges slow).
+      const [squad, pair, tokenDoc, sender] = await Promise.all([
+        getDoc(fs(`squads/${encodeURIComponent(squadId)}`), auth),
+        getDoc(fs(pairPath), auth),
+        getDoc(fs(`fcmTokens/${toUid}`), auth),
+        getDoc(fs(`squads/${encodeURIComponent(squadId)}/members/${fromUid}`), auth),
+      ]);
 
       // Same squad?
-      const squad = await getDoc(fs(`squads/${encodeURIComponent(squadId)}`), auth);
       const members = (squad?.fields?.memberUids?.arrayValue?.values ?? []).map((v) => v.stringValue);
       if (!members.includes(fromUid) || !members.includes(toUid)) return json({ error: 'not in this squad' }, 403);
 
-      // Rate limit per pair.
-      const pairPath = `nudges/${fromUid}_${toUid}`;
-      const last = Number((await getDoc(fs(pairPath), auth))?.fields?.at?.integerValue ?? 0);
+      // Rate limit per pair: at most 3 in any hour.
       const now = Date.now();
-      if (now - last < NUDGE_GAP_MS) {
-        return json({ error: 'too soon', retryInMinutes: Math.ceil((NUDGE_GAP_MS - (now - last)) / 60000) }, 429);
+      const recent = (pair?.fields?.times?.arrayValue?.values ?? [])
+        .map((v) => Number(v.integerValue ?? 0))
+        .filter((t) => now - t < WINDOW_MS)
+        .sort((a, b) => a - b);
+      if (recent.length >= NUDGES_PER_WINDOW) {
+        const retryMs = recent[recent.length - NUDGES_PER_WINDOW] + WINDOW_MS - now;
+        return json({ error: 'too soon', retryInMinutes: Math.max(1, Math.ceil(retryMs / 60000)) }, 429);
       }
 
-      const tokenDoc = await getDoc(fs(`fcmTokens/${toUid}`), auth);
       const pushToken = tokenDoc?.fields?.token?.stringValue;
       if (!pushToken) return json({ error: 'friend has no notifications' }, 404);
 
-      const sender = await getDoc(fs(`squads/${encodeURIComponent(squadId)}/members/${fromUid}`), auth);
       const name = sender?.fields?.name?.stringValue ?? 'A friend';
       const avatar = sender?.fields?.avatar?.stringValue ?? '👋';
 
@@ -69,18 +84,20 @@ export default {
         const err = await send.text();
         // The friend uninstalled or the token expired: forget it.
         if (send.status === 404 || err.includes('UNREGISTERED')) {
-          await fetch(fs(`fcmTokens/${toUid}`), { method: 'DELETE', headers: auth });
+          ctx.waitUntil(fetch(fs(`fcmTokens/${toUid}`), { method: 'DELETE', headers: auth }));
           return json({ error: 'friend has no notifications' }, 404);
         }
         return json({ error: 'push failed' }, 502);
       }
 
-      await fetch(fs(pairPath), {
+      // Remember this nudge for the rate limit after answering, so the sender doesn't wait for it.
+      const times = [...recent, now].map((t) => ({ integerValue: String(t) }));
+      ctx.waitUntil(fetch(fs(pairPath), {
         method: 'PATCH',
         headers: { ...auth, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { at: { integerValue: String(now) } } }),
-      });
-      return json({ ok: true });
+        body: JSON.stringify({ fields: { times: { arrayValue: { values: times } } } }),
+      }));
+      return json({ ok: true, left: NUDGES_PER_WINDOW - times.length });
     } catch (e) {
       return json({ error: 'server error' }, 500);
     }
