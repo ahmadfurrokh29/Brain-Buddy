@@ -60,6 +60,7 @@ class SchedulesSection extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      useRootNavigator: true,
       builder: (_) => _ScheduleEditor(existing: existing),
     );
     if (result == null) return;
@@ -155,7 +156,8 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final valid = _name.text.trim().isNotEmpty && _days.isNotEmpty && _start != _end;
-    return Padding(
+    // Scrolls only when the keyboard leaves too little room.
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(widget.existing == null ? 'New schedule' : 'Edit schedule', style: t.titleLarge),
@@ -185,19 +187,29 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
           const SizedBox(width: 12),
           Expanded(child: _TimeBox(label: 'To', value: _time(context, _end), onTap: () => _pick(false))),
         ]),
-        if (_end < _start)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text('Runs past midnight, into the next morning.', style: t.bodySmall?.copyWith(color: context.muted)),
+        // Always one line here, so the sheet keeps its height whichever preset is picked.
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            _end < _start ? 'Runs past midnight, into the next morning.' : 'Starts and ends on the same day.',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: t.bodySmall?.copyWith(color: context.muted),
           ),
+        ),
         const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        // Seven equal day buttons that always fit the width.
+        Row(children: [
           for (var d = 1; d <= 7; d++)
-            FilterChip(
-              label: Text(_dayLetters[d - 1]),
-              selected: _days.contains(d),
-              showCheckmark: false,
-              onSelected: (v) => setState(() => v ? _days.add(d) : _days.remove(d)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: _DayButton(
+                  letter: _dayLetters[d - 1],
+                  selected: _days.contains(d),
+                  onTap: () => setState(() => _days.contains(d) ? _days.remove(d) : _days.add(d)),
+                ),
+              ),
             ),
         ]),
         const SizedBox(height: 16),
@@ -225,6 +237,35 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
             child: const Text('Delete schedule', style: TextStyle(color: BB.coral)),
           ),
       ]),
+    );
+  }
+}
+
+class _DayButton extends StatelessWidget {
+  final String letter;
+  final bool selected;
+  final VoidCallback onTap;
+  const _DayButton({required this.letter, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? BB.mint : scheme.surfaceContainerHighest,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          height: 40,
+          child: Center(
+            child: Text(
+              letter,
+              style: TextStyle(fontWeight: FontWeight.w800, color: selected ? Colors.white : scheme.onSurface),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

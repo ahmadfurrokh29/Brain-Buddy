@@ -17,10 +17,12 @@ import '../../widgets/common.dart';
 
 /// Opens the Weekly Reel Receipt for the last 7 days, with a Share button.
 Future<void> showWeeklyReceipt(BuildContext context) {
+  // Opens above the bottom tab bar, so the receipt and Share button get the whole screen.
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
+    useRootNavigator: true,
+    useSafeArea: true,
     builder: (_) => const _ReceiptSheet(),
   );
 }
@@ -44,10 +46,12 @@ class _ReceiptSheetState extends ConsumerState<_ReceiptSheet> {
       final png = await image.toByteData(format: ui.ImageByteFormat.png);
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/brain_buddy_week.png')..writeAsBytesSync(png!.buffer.asUint8List());
-      await SharePlus.instance.share(ShareParams(
-        files: [XFile(file.path, mimeType: 'image/png')],
-        text: 'My week in reels: ${r.watched} reels, ${r.distanceLabel} of scrolling. Counted with Brain Buddy 🧠',
-      ));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'image/png')],
+          text: 'My week in reels: ${r.watched} reels, ${r.distanceLabel} of scrolling. Counted with Brain Buddy 🧠',
+        ),
+      );
     } catch (e) {
       if (mounted) showSnack(context, 'Could not share: $e');
     } finally {
@@ -60,24 +64,62 @@ class _ReceiptSheetState extends ConsumerState<_ReceiptSheet> {
     final days = ref.watch(daysProvider(14));
     final budget = ref.watch(configProvider).value?.budget ?? 30;
     return SafeArea(
-      child: days.when(
-        loading: () => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
-        error: (e, _) => Padding(padding: const EdgeInsets.all(24), child: Text('$e')),
-        data: (list) {
-          final r = WeeklyReceipt.from(list, budget);
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              RepaintBoundary(key: _cardKey, child: ReceiptCard(r: r)),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _sharing || r.isEmpty ? null : () => _share(r),
-                icon: const Icon(Icons.share_rounded),
-                label: const Text('Share my receipt'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 4, 8, 0),
+              child: IconButton(
+                tooltip: 'Close',
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.of(context).pop(),
               ),
-            ]),
-          );
-        },
+            ),
+          ),
+          Flexible(
+            child: days.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (e, _) => Padding(padding: const EdgeInsets.all(24), child: Text('$e')),
+              data: (list) {
+                final r = WeeklyReceipt.from(list, budget);
+                // No scrolling: on short screens the card shrinks to fit above the Share button.
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (_, box) => FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: SizedBox(
+                              width: box.maxWidth,
+                              child: RepaintBoundary(
+                                key: _cardKey,
+                                child: ReceiptCard(r: r),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _sharing || r.isEmpty ? null : () => _share(r),
+                        icon: const Icon(Icons.share_rounded),
+                        label: const Text('Share my receipt'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -98,12 +140,17 @@ class ReceiptCard extends StatelessWidget {
     final change = r.changePercent;
 
     Widget line(String label, String value, {Color? color}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(children: [
-            Expanded(child: Text(label, style: mono)),
-            Text(value, style: mono.copyWith(fontWeight: FontWeight.w700, color: color ?? BB.ink)),
-          ]),
-        );
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: mono)),
+          Text(
+            value,
+            style: mono.copyWith(fontWeight: FontWeight.w700, color: color ?? BB.ink),
+          ),
+        ],
+      ),
+    );
 
     return Container(
       width: 340,
@@ -113,31 +160,39 @@ class ReceiptCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4))],
       ),
-      child: Column(children: [
-        BrainBuddy(mood: r.mood, size: 86, glow: false),
-        const SizedBox(height: 6),
-        Text('WEEKLY REEL RECEIPT', style: mono.copyWith(fontWeight: FontWeight.w800, letterSpacing: 2)),
-        Text(range, style: mono.copyWith(color: BB.grey, fontSize: 12)),
-        const _Dashes(),
-        Text('${r.watched}', style: big),
-        Text('reels watched', style: mono.copyWith(color: BB.grey)),
-        const SizedBox(height: 8),
-        Text(r.distanceLabel, style: big.copyWith(fontSize: 26, color: BB.mintDark)),
-        Text('scrolled with my thumb', style: mono.copyWith(color: BB.grey)),
-        const _Dashes(),
-        line('Time in reels', formatMinutes(r.minutes)),
-        line('Skimmed', '${r.skimmed}'),
-        if (r.topApp != null) line('Top app', '${r.topApp} (${r.topAppReels})'),
-        if (r.bestDay != null) line('Best day', '${DateFormat('EEE').format(r.bestDay!.date)} (${r.bestDay!.watched})'),
-        if (change != null)
-          line('vs last week', '${change > 0 ? '+' : ''}$change%', color: change <= 0 ? BB.mintDark : BB.coral),
-        line('Brain buddy', r.mood.label),
-        const _Dashes(),
-        Text(change != null && change < 0 ? 'Fewer reels than last week. Nice! 🎉' : 'Every reel you skip is time back. 🌿',
-            style: mono.copyWith(fontSize: 12), textAlign: TextAlign.center),
-        const SizedBox(height: 6),
-        Text('brain buddy', style: mono.copyWith(color: BB.grey, fontSize: 11, letterSpacing: 3)),
-      ]),
+      child: Column(
+        children: [
+          BrainBuddy(mood: r.mood, size: 86, glow: false),
+          const SizedBox(height: 6),
+          Text('WEEKLY REEL RECEIPT', style: mono.copyWith(fontWeight: FontWeight.w800, letterSpacing: 2)),
+          Text(range, style: mono.copyWith(color: BB.grey, fontSize: 12)),
+          const _Dashes(),
+          Text('${r.watched}', style: big),
+          Text('reels watched', style: mono.copyWith(color: BB.grey)),
+          const SizedBox(height: 8),
+          Text(r.distanceLabel, style: big.copyWith(fontSize: 26, color: BB.mintDark)),
+          Text('scrolled with my thumb', style: mono.copyWith(color: BB.grey)),
+          const _Dashes(),
+          line('Time in reels', formatMinutes(r.minutes)),
+          line('Skimmed', '${r.skimmed}'),
+          if (r.topApp != null) line('Top app', '${r.topApp} (${r.topAppReels})'),
+          if (r.bestDay != null)
+            line('Best day', '${DateFormat('EEE').format(r.bestDay!.date)} (${r.bestDay!.watched})'),
+          if (change != null)
+            line('vs last week', '${change > 0 ? '+' : ''}$change%', color: change <= 0 ? BB.mintDark : BB.coral),
+          line('Brain buddy', r.mood.label),
+          const _Dashes(),
+          Text(
+            change != null && change < 0
+                ? 'Fewer reels than last week. Nice! 🎉'
+                : 'Every reel you skip is time back. 🌿',
+            style: mono.copyWith(fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text('brain buddy', style: mono.copyWith(color: BB.grey, fontSize: 11, letterSpacing: 3)),
+        ],
+      ),
     );
   }
 }
@@ -149,7 +204,12 @@ class _Dashes extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text('- ' * 24, maxLines: 1, overflow: TextOverflow.clip, style: GoogleFonts.robotoMono(color: BB.grey, fontSize: 12)),
+      child: Text(
+        '- ' * 24,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: GoogleFonts.robotoMono(color: BB.grey, fontSize: 12),
+      ),
     );
   }
 }

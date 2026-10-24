@@ -156,13 +156,13 @@ class _DaysChart extends StatelessWidget {
             color: BB.coral.withValues(alpha: 0.7),
             strokeWidth: 1.5,
             dashArray: [6, 4],
-            label: HorizontalLineLabel(show: true, alignment: Alignment.topRight, style: const TextStyle(color: BB.coral, fontSize: 11, fontWeight: FontWeight.w700), labelResolver: (_) => 'Budget'),
+            label: HorizontalLineLabel(show: true, alignment: Alignment.topLeft, style: const TextStyle(color: BB.coral, fontSize: 11, fontWeight: FontWeight.w700), labelResolver: (_) => 'Budget'),
           ),
         ]),
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(),
           rightTitles: const AxisTitles(),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32)),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, getTitlesWidget: _leftTitle)),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -210,7 +210,7 @@ class _HourChart extends StatelessWidget {
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(),
           rightTitles: const AxisTitles(),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28)),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 28, getTitlesWidget: _leftTitle)),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -288,4 +288,11 @@ class _AppsBreakdown extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Left axis numbers. The chart's top edge isn't a round number (e.g. 43.2), so its label is left out:
+/// it overlapped the round label just below it.
+Widget _leftTitle(double value, TitleMeta meta) {
+  if (value == meta.max && value % meta.appliedInterval != 0) return const SizedBox.shrink();
+  return SideTitleWidget(meta: meta, child: Text(meta.formattedValue, style: const TextStyle(fontSize: 12)));
 }
