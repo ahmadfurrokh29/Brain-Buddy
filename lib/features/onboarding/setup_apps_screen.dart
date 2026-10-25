@@ -140,9 +140,26 @@ class AppBadge extends ConsumerWidget {
     'Reddit': Color(0xFFFF4500),
   };
 
+  /// Brand logos (assets/app_logos) for apps that aren't installed, and always for YouTube Shorts:
+  /// the installed YouTube app's own icon is the red YouTube logo, not the Shorts one.
+  static const _logos = {
+    'Instagram': 'instagram',
+    'Instagram Lite': 'instagram_lite',
+    'YouTube Shorts': 'youtube_shorts',
+    'TikTok': 'tiktok',
+    'Facebook': 'facebook',
+    'Facebook Lite': 'facebook_lite',
+    'Snapchat': 'snapchat',
+    'Reddit': 'reddit',
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final icon = pkg == null ? null : ref.watch(appIconsProvider).value?[pkg];
+    final logo = _logos[name];
+    final icon = pkg == null || name == 'YouTube Shorts' ? null : ref.watch(appIconsProvider).value?[pkg];
+    if (icon == null && logo != null) {
+      return Image.asset('assets/app_logos/$logo.png', width: size, height: size);
+    }
     if (icon != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(size * 0.24),

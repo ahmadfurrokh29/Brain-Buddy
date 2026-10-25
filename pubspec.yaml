@@ -77,6 +77,8 @@ flutter:
   # The splash picture (made by tool/render_splash_test.dart), also used by Android's start-up screen.
   assets:
     - assets/splash/splash.png
+    # Brand logos for the app pickers: official glyphs from Simple Icons (simpleicons.org) on brand colours.
+    - assets/app_logos/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
