@@ -1,5 +1,6 @@
-package com.brainbuddy.app.service
+package com.brainbean.app.service
 
+import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
@@ -9,25 +10,50 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
+import android.os.Build
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
-import com.brainbuddy.app.core.Mood
+import com.brainbean.app.core.Mood
 import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * The Brain Buddy mascot for the floating counter. A native copy of lib/widgets/brain_buddy.dart
+ * The Brain Bean mascot for the floating counter. A native copy of lib/widgets/brain_buddy.dart
  * (same lobes, folds, faces and colours) because overlays over other apps can't run Flutter.
  */
 class BrainView(context: Context) : View(context) {
 
     var mood: Mood = Mood.FRESH
         set(value) {
-            if (field != value) { field = value; invalidate() }
+            if (field == value) return
+            val old = field
+            field = value
+            // Colours blend over to the new mood instead of switching at once.
+            if (isAttachedToWindow) fadeColours(old, value) else invalidate()
         }
 
     /** Draw the brain in deeper shades, so it stands out on a light background (the floating counter). */
     var deep = false
+
+    /** Soft shadow under the brain, so it stays visible when it floats on its own over a video. */
+    var shadow = false
+        set(value) {
+            field = value
+            // Shadows on shapes need software drawing before Android 9.
+            if (value && Build.VERSION.SDK_INT < 28) setLayerType(LAYER_TYPE_SOFTWARE, null)
+            invalidate()
+        }
+
+    /** 0 = mouth closed (the mood's own mouth), 1 = wide open, waiting to eat a reel. */
+    private var mouth = 0f
+    private var mouthAnim: ValueAnimator? = null
+
+    /** The colours being shown, which follow [mood] with a short blend. */
+    private var shownTop = Mood.FRESH.top
+    private var shownBody = Mood.FRESH.body
+    private var shownOutline = Mood.FRESH.outline
+    private var colourAnim: ValueAnimator? = null
 
     private var phase = 0f
     private var bounce = 0f
@@ -51,6 +77,45 @@ class BrainView(context: Context) : View(context) {
     /** Wobble once, like when a reel is counted. */
     fun poke() = bounceAnim.start()
 
+    /** A new reel is on screen: open wide. */
+    fun openMouth() = animateMouth(1f, 160)
+
+    /** The reel was counted: shut the mouth with a gulp and a wobble. */
+    fun gulp() {
+        animateMouth(0f, 120)
+        poke()
+    }
+
+    /** The reel was skipped before it counted: close quietly, no gulp. */
+    fun closeMouth() = animateMouth(0f, 300)
+
+    private fun animateMouth(to: Float, ms: Long) {
+        mouthAnim?.cancel()
+        if (mouth == to) return
+        mouthAnim = ValueAnimator.ofFloat(mouth, to).apply {
+            duration = ms
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { mouth = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun fadeColours(from: Mood, to: Mood) {
+        colourAnim?.cancel()
+        val argb = ArgbEvaluator()
+        colourAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 700
+            addUpdateListener {
+                val t = it.animatedFraction
+                shownTop = argb.evaluate(t, from.top, to.top) as Int
+                shownBody = argb.evaluate(t, from.body, to.body) as Int
+                shownOutline = argb.evaluate(t, from.outline, to.outline) as Int
+                invalidate()
+            }
+            start()
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         idle.start()
@@ -59,6 +124,8 @@ class BrainView(context: Context) : View(context) {
     override fun onDetachedFromWindow() {
         idle.cancel()
         bounceAnim.cancel()
+        mouthAnim?.cancel()
+        colourAnim?.cancel()
         super.onDetachedFromWindow()
     }
 
@@ -74,14 +141,23 @@ class BrainView(context: Context) : View(context) {
         canvas.scale(1 + wobble, (1 - wobble) * if (melted) 0.9f else 1f)
         canvas.translate(-s / 2, -s / 2)
 
+        if (colourAnim?.isRunning != true) { shownTop = mood.top; shownBody = mood.body; shownOutline = mood.outline }
         val body = bodyPath(s)
-        val top = if (deep) mood.body else mood.top
-        val bottom = if (deep) blend(mood.body, mood.outline, 0.45f) else mood.body
+        if (shadow) {
+            // Same shape, a little lower and blurred: a soft shadow that works on bright and dark videos.
+            fill.color = Color.argb(70, 0, 0, 0)
+            fill.setShadowLayer(s * 0.06f, 0f, s * 0.03f, Color.argb(90, 0, 0, 0))
+            canvas.drawPath(body, fill)
+            fill.clearShadowLayer()
+            fill.alpha = 255 // the shadow's see-through colour must not carry over to the body
+        }
+        val top = if (deep) shownBody else shownTop
+        val bottom = if (deep) blend(shownBody, shownOutline, 0.45f) else shownBody
         fill.shader = LinearGradient(0f, 0f, 0f, s, top, bottom, Shader.TileMode.CLAMP)
         canvas.drawPath(body, fill)
         fill.shader = null
         if (melted) drips(canvas, s)
-        stroke.color = mood.outline
+        stroke.color = shownOutline
         stroke.strokeWidth = s * 0.03f
         canvas.drawPath(body, stroke)
 
@@ -100,7 +176,7 @@ class BrainView(context: Context) : View(context) {
     }
 
     private fun drips(canvas: Canvas, s: Float) {
-        fill.color = mood.body
+        fill.color = shownBody
         for (d in DRIPS) {
             val x = d[0] * s; val y = d[1] * s; val w = d[2] * s; val h = d[3] * s
             oval.set(x - w / 2, y - h * 0.3f, x + w / 2, y + h * 0.7f)
@@ -110,7 +186,7 @@ class BrainView(context: Context) : View(context) {
     }
 
     private fun folds(canvas: Canvas, s: Float) {
-        stroke.color = withAlpha(mood.outline, 0.55f)
+        stroke.color = withAlpha(shownOutline, 0.55f)
         stroke.strokeWidth = s * 0.022f
         canvas.drawLine(s * 0.5f, s * 0.14f, s * 0.5f, s * 0.33f, stroke)
         arc(canvas, s, 0.30f, 0.30f, 0.07f, 198f, 144f)
@@ -158,6 +234,17 @@ class BrainView(context: Context) : View(context) {
         }
 
         val mx = s * 0.5f; val my = s * 0.61f
+        if (mouth > 0.15f) {
+            // Open mouth, ready to eat a reel: a dark oval with a little tongue.
+            val w = s * (0.06f + 0.05f * mouth); val h = s * (0.03f + 0.09f * mouth)
+            oval.set(mx - w, my - h * 0.35f, mx + w, my + h * 0.65f)
+            canvas.drawOval(oval, ink)
+            fill.color = Color.parseColor("#FF7A9C")
+            val tw = w * 0.6f
+            oval.set(mx - tw, my + h * 0.65f - tw * 0.9f, mx + tw, my + h * 0.65f - tw * 0.05f)
+            canvas.drawOval(oval, fill)
+            return
+        }
         when (mood) {
             Mood.FRESH -> {
                 val p = Path().apply {

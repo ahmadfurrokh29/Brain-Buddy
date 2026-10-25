@@ -1,4 +1,4 @@
-package com.brainbuddy.app.service
+package com.brainbean.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
@@ -18,13 +18,13 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.brainbuddy.app.core.Config
-import com.brainbuddy.app.core.CountBus
-import com.brainbuddy.app.core.Db
-import com.brainbuddy.app.core.CloudBackup
-import com.brainbuddy.app.core.SquadSync
-import com.brainbuddy.app.core.TargetApps
-import com.brainbuddy.app.widget.BrainWidgetProvider
+import com.brainbean.app.core.Config
+import com.brainbean.app.core.CountBus
+import com.brainbean.app.core.Db
+import com.brainbean.app.core.CloudBackup
+import com.brainbean.app.core.SquadSync
+import com.brainbean.app.core.TargetApps
+import com.brainbean.app.widget.BrainWidgetProvider
 
 /**
  * Counts reels.
@@ -122,7 +122,7 @@ class ReelCounterService : AccessibilityService() {
     }
 
     /**
-     * Home, Recents and the power button. Brain Buddy only gets events from the reel apps, so without
+     * Home, Recents and the power button. Brain Bean only gets events from the reel apps, so without
      * these it noticed the user had left only seconds later, and the lock stayed on top of the home screen.
      */
     private val systemEvents = object : BroadcastReceiver() {
@@ -186,6 +186,10 @@ class ReelCounterService : AccessibilityService() {
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && isReelSwipe(event)) {
             pendingScroll = true
             lastScrollAt = lastEventAt
+            // The floating brain opens its mouth for the new reel; it gulps if the reel counts.
+            if (reelsPkg == pkg && config.floatingCounter) {
+                overlays.counterSawSwipe(config.dwellSec * 1000L + SETTLE_MS + MOUTH_GRACE_MS)
+            }
             // Pagers (Instagram, Facebook) report which reel number is on screen. YouTube reports -1.
             if (event.fromIndex >= 0 && event.fromIndex == event.toIndex) {
                 pagerIndex = event.fromIndex
@@ -295,10 +299,17 @@ class ReelCounterService : AccessibilityService() {
                     pendingScroll = false
                     return
                 }
+                if (!pendingScroll && pagerIndex >= 0 && pagerIndex == curIndex && pagerSource == curIndexSource) {
+                    // No swipe and the app says the same reel number is still on screen: the texts changed
+                    // because something covers the reel for a moment (Instagram's "AI content" label), not
+                    // because a new reel came up. Counting that made one reel count twice.
+                    log("same reel number $pagerIndex, texts changed without a swipe: ignored ${texts.take(2)}")
+                    return
+                }
             }
             appsWithText.add(app.pkg)
             learnChrome(app.pkg, snap.texts)
-            startReel(ReelDetector.key(texts), texts, snap.isAd)
+            startReel(keyFor(texts), texts, snap.isAd)
         } else if ((app.showsText && curKey == null) ||
             (waitingForText(now) && (app.showsText || app.pkg in appsWithText || curKey == null))
         ) {
@@ -337,8 +348,34 @@ class ReelCounterService : AccessibilityService() {
         for (t in texts) seen[t] = (seen[t] ?: 0) + 1
     }
 
+    /**
+     * Reels seen at each feed position (Instagram and Facebook report it), with their key and texts.
+     * Safety net for the key: if a reel comes back to the same position with mostly the same texts but a
+     * label that comes and goes changed its key, it keeps its first key, so it isn't counted again.
+     */
+    private val seenAtPosition = HashMap<Int, Pair<String, List<String>>>()
+    private var seenSource: String? = null
+    private var seenPkg: String? = null
+
+    private fun keyFor(texts: List<String>): String {
+        val key = ReelDetector.key(texts)
+        // The position is only up to date right after a swipe (on opening the feed it can lag one reel behind).
+        if (pagerIndex < 0 || !pendingScroll) return key
+        if (pagerSource != seenSource) {
+            seenAtPosition.clear()
+            seenSource = pagerSource
+        }
+        val before = seenAtPosition[pagerIndex]
+        if (before != null && before.first != key && ReelDetector.overlap(before.second, texts) >= 0.5) {
+            log("position $pagerIndex: same reel, key changed $key -> keeping ${before.first}")
+            return before.first
+        }
+        seenAtPosition[pagerIndex] = key to texts
+        return key
+    }
+
     private fun startReel(key: String, texts: List<String>?, isAd: Boolean) {
-        log("new reel $key ad=$isAd swipe=$pendingScroll index=$pagerIndex texts=${texts?.take(3)}")
+        log("new reel $key ad=$isAd swipe=$pendingScroll index=$pagerIndex texts=$texts")
         finishReel()
         recordFlownPastReels()
         val now = System.currentTimeMillis()
@@ -432,6 +469,11 @@ class ReelCounterService : AccessibilityService() {
     private fun enterReels(pkg: String) {
         log("enter reels $pkg")
         finishReel()
+        if (pkg != seenPkg) {
+            // Feed positions only mean something within one app.
+            seenAtPosition.clear()
+            seenPkg = pkg
+        }
         reelsPkg = pkg
         curTexts = null
         pendingScroll = false
@@ -809,6 +851,9 @@ class ReelCounterService : AccessibilityService() {
                 CloudBackup.backup(this, force = true)
                 if (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY) notifier.receiptReady()
             }
+            // Daily check-in with the squads, even on a day without reels: the squad clean-up only removes
+            // people whose app hasn't checked in for 30 days, never someone who simply stopped watching.
+            SquadSync.sync(this, force = true)
             day = today
             counted.clear()
             counted.addAll(db.countedKeys(day))
@@ -831,6 +876,8 @@ class ReelCounterService : AccessibilityService() {
         private const val EMERGENCY_REELS = 10
         /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
         private const val SETTLE_MS = 400L
+        /** Extra time for the reel's text to load before the brain gives up waiting and closes its mouth. */
+        private const val MOUTH_GRACE_MS = 1500L
         private const val TEXT_WAIT_MS = 3000L
         private const val SWIPE_TEXT_WAIT_MS = 1500L
         private const val MAX_FLOWN_PAST = 10

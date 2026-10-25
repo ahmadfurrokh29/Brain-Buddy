@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/nudges.dart';
 import 'core/providers.dart';
 import 'core/squads.dart';
+import 'core/startup.dart';
 import 'features/doctor/doctor_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/insights/insights_screen.dart';
@@ -60,6 +61,13 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
     super.initState();
     // Coming back from Android settings or a reel app: refresh counts and permission status.
     _lifecycle = AppLifecycleListener(onResume: () => refreshAll(ref));
+    // Firebase finishes starting behind the splash screen; these need it.
+    firebaseReady.then((_) {
+      if (mounted) _listenToFirebase();
+    });
+  }
+
+  void _listenToFirebase() {
     // After signing in (on this or a new phone), tell the background counter which squads to sync.
     ref.listenManual(authUserProvider, (prev, next) {
       if (next.value != null && prev?.value?.uid != next.value!.uid) {
@@ -67,7 +75,7 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
         registerPushToken().catchError((Object e) => debugPrint('BrainBuddy push: could not register: $e'));
       }
     }, fireImmediately: true);
-    // A nudge while Brain Buddy is open: Android only shows pushes automatically in the background.
+    // A nudge while Brain Bean is open: Android only shows pushes automatically in the background.
     FirebaseMessaging.onMessage.listen((m) {
       final n = m.notification;
       if (n == null) return;
@@ -86,7 +94,7 @@ class _BrainBuddyAppState extends ConsumerState<BrainBuddyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Brain Buddy',
+      title: 'Brain Bean',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

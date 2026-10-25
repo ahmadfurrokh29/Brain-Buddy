@@ -49,7 +49,7 @@ class _ReceiptSheetState extends ConsumerState<_ReceiptSheet> {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path, mimeType: 'image/png')],
-          text: 'My week in reels: ${r.watched} reels, ${r.distanceLabel} of scrolling. Counted with Brain Buddy 🧠',
+          text: 'My week in reels: ${r.watched} reels, ${r.distanceLabel} of scrolling. Counted with Brain Bean 🧠',
         ),
       );
     } catch (e) {
@@ -180,7 +180,7 @@ class ReceiptCard extends StatelessWidget {
             line('Best day', '${DateFormat('EEE').format(r.bestDay!.date)} (${r.bestDay!.watched})'),
           if (change != null)
             line('vs last week', '${change > 0 ? '+' : ''}$change%', color: change <= 0 ? BB.mintDark : BB.coral),
-          line('Brain buddy', r.mood.label),
+          line('Brain bean', r.mood.label),
           const _Dashes(),
           Text(
             change != null && change < 0
@@ -190,7 +190,7 @@ class ReceiptCard extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
-          Text('brain buddy', style: mono.copyWith(color: BB.grey, fontSize: 11, letterSpacing: 3)),
+          Text('brain bean', style: mono.copyWith(color: BB.grey, fontSize: 11, letterSpacing: 3)),
         ],
       ),
     );

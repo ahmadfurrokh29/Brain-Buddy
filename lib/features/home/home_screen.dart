@@ -41,9 +41,10 @@ class HomeScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             children: [
               Row(children: [
-                const BrainBuddy(mood: Mood.fresh, size: 36, glow: false),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Brain Buddy', style: t.titleLarge)),
+                // Kept small so the header doesn't crowd the big brain below.
+                const BrainBuddy(mood: Mood.fresh, size: 28, glow: false),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Brain Bean', style: t.titleMedium?.copyWith(fontSize: 18, fontWeight: FontWeight.w800))),
                 _TrackingPill(status: status, config: c),
               ]),
               const SizedBox(height: 16),
@@ -66,7 +67,7 @@ class HomeScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(color: mood.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
                     child: Text(
-                      '${mood.label} buddy • ${_leftText(d.watched, allowance)}',
+                      '${mood.label} bean • ${_leftText(d.watched, allowance)}',
                       style: TextStyle(fontWeight: FontWeight.w800, color: Color.lerp(mood.color, BB.ink, 0.45)),
                     ),
                   ),
@@ -142,16 +143,17 @@ class _TrackingPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (config.isPaused) {
-      return const StatusPill(label: 'Paused', color: Color(0xFFE0A800), icon: Icons.pause_circle_rounded);
+      return const StatusPill(label: 'Paused', color: Color(0xFFE0A800), icon: Icons.pause_circle_rounded, compact: true);
     }
     if (status == null) return const SizedBox.shrink();
     if (status!.healthy) {
-      return const StatusPill(label: 'Tracking on', color: BB.mintDark, icon: Icons.circle);
+      return const StatusPill(label: 'On', color: BB.mintDark, icon: Icons.circle, compact: true);
     }
     return StatusPill(
-      label: 'Tracking off — fix',
+      label: 'Off — fix',
       color: BB.coral,
       icon: Icons.error_rounded,
+      compact: true,
       onTap: () => context.push('/doctor'),
     );
   }

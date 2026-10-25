@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.os.Handler
 import android.os.Looper

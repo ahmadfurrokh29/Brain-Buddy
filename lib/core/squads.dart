@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -102,6 +103,14 @@ SquadMember? lastWeekWinner(List<SquadMember> members, String lastWeekKey) {
   return reported.isEmpty ? null : reported.first;
 }
 
+/// A short, plain message for a failed sign-in (the technical details only go to the log).
+String signInErrorMessage(Object e) {
+  if (e is SquadException) return e.message;
+  if (e is GoogleSignInException && e.code == GoogleSignInExceptionCode.canceled) return 'Sign-in cancelled.';
+  if (e is FirebaseAuthException && e.code == 'network-request-failed') return 'No internet connection. Please try again.';
+  return 'Sign-in didn\'t work. Please try again.';
+}
+
 /// Sign-in and Squads, backed by Firebase Auth and Firestore.
 class SquadsRepo {
   final FirebaseAuth auth;
@@ -139,7 +148,7 @@ class SquadsRepo {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use' || e.code == 'email-already-in-use') {
         throw const SquadException(
-            'That Google account already has Brain Buddy. Sign out of the guest account, then sign in with Google.');
+            'That Google account already has Brain Bean. Sign out of the guest account, then sign in with Google.');
       }
       rethrow;
     }
@@ -251,6 +260,20 @@ class SquadsRepo {
     await ref.collection('members').doc(memberUid).delete();
   }
 
+  /// Owner only: deletes the squad for everyone (all members' numbers, the invite code and the squad).
+  Future<void> deleteSquad(Squad s) async {
+    final ref = db.collection('squads').doc(s.id);
+    final batch = db.batch();
+    // One batch, so the rules still see the squad (and that we own it) while its parts are removed.
+    for (final m in (await ref.collection('members').get()).docs) {
+      batch.delete(m.reference);
+    }
+    batch.delete(db.collection('codes').doc(s.code));
+    batch.delete(ref);
+    await batch.commit();
+    await _afterChange();
+  }
+
   Future<void> rename(Squad s, String name) => db.collection('squads').doc(s.id).update({'name': name});
 
   Future<void> signOut() async {
@@ -292,24 +315,28 @@ class SquadsRepo {
     return count;
   }
 
-  /// Deletes the online account: leaves every squad, removes the profile and backup, then the login itself.
+  /// Deletes the online account with one tap. The nudge Worker does it with admin rights (Firebase only
+  /// lets an app delete a login that signed in minutes ago, which would mean signing in again):
+  /// it leaves every squad, deletes the nickname, cloud backup, push address and nudge notes, then the login.
   Future<void> deleteAccount() async {
-    final uid = user!.uid;
-    final squads = await db.collection('squads').where('memberUids', arrayContains: uid).get();
-    for (final d in squads.docs) {
-      await leave(Squad.fromDoc(d));
+    final idToken = await user!.getIdToken();
+    final client = HttpClient();
+    try {
+      final req = await client.postUrl(Uri.parse('$kNudgeWorkerUrl/delete-account'));
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
+      final res = await req.close();
+      await res.drain<void>();
+      if (res.statusCode != 200) throw const SquadException('Could not delete the account. Please try again.');
+    } finally {
+      client.close();
     }
-    if (!user!.isAnonymous) {
-      final userDoc = db.collection('users').doc(uid);
-      for (final d in (await userDoc.collection('days').get()).docs) {
-        await d.reference.delete();
-      }
-      await userDoc.collection('backup').doc('settings').delete();
-    }
-    await db.collection('users').doc(uid).delete();
-    await forgetPushToken(uid);
     await bridge.setConfigRaw({'squadIds': <String>[]});
-    await user!.delete();
+    // The login is gone on the server; drop it on this phone too.
+    await auth.signOut();
+    // The next Google sign-in shows the account picker instead of reusing the deleted account.
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {}
   }
 
   /// Tells the background counter which squads to sync, and syncs now.

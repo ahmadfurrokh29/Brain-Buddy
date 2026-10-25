@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.brainbuddy.app"
+    namespace = "com.brainbean.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.brainbuddy.app"
+        applicationId = "com.brainbean.app"
         // Android 8.0+: needed for notification channels and accessibility overlays.
         minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
@@ -32,6 +32,8 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Extra keep rules for code that plugins look up by name (see the file).
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

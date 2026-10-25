@@ -171,14 +171,7 @@ class _Setting extends StatelessWidget {
     final items = {...options, value}.toList()..sort();
     return Row(children: [
       Expanded(child: Text(label)),
-      DropdownButton<int>(
-        value: value,
-        underline: const SizedBox.shrink(),
-        items: items.map((v) => DropdownMenuItem(value: v, child: Text(format(v)))).toList(),
-        onChanged: (v) {
-          if (v != null) onChanged(v);
-        },
-      ),
+      BBDropdown<int>(value: value, options: items, label: format, onChanged: onChanged),
     ]);
   }
 }

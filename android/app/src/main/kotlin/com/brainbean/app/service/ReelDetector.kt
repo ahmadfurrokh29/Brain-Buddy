@@ -1,8 +1,8 @@
-package com.brainbuddy.app.service
+package com.brainbean.app.service
 
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import com.brainbuddy.app.core.TargetApp
+import com.brainbean.app.core.TargetApp
 
 /**
  * Reads the screen of a tracked app and answers two questions:
@@ -33,6 +33,7 @@ object ReelDetector {
         "more actions", "new content available", "youtube premium", "privacy setting public",
         "reels tab details", "tap to show video controls", "video, overlays visible", "video buttons are active",
         "track position", "upvote", "downvote", "unmute", "add friends", "story sent", "spotlight",
+        "seekbar", "view likes",
     )
 
     /** Bottom-tab labels such as "Home, tab 1 of 6". */
@@ -43,7 +44,7 @@ object ReelDetector {
         "like this", "dislike this", "share this", "remix this", "view comments", "subscribe to", "comments.",
         "see more videos using this sound", "go to channel", "double tap", "tap to", "swipe",
         "subscriptions", "navigate to your reels profile", "enter full-screen", "are you interested in this",
-        "opera_content_index",
+        "opera_content_index", "like button",
     )
 
     private val AD_LABELS = setOf("sponsored", "ad", "promoted", "sponsored ·", "ad ·")
@@ -91,6 +92,11 @@ object ReelDetector {
 
     private val COUNT_WORDS = Regex("""\d[\d.,]*\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?|votes?|reactions?)\b""")
     private val TIMER = Regex("""\d+:\d{2}|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\b|\b\d+\s*[smhdw]\b""")
+    /**
+     * Spelled-out counters: Instagram's "Reshare number is 31066", "Save number is 9230", "Reposted 1788 times",
+     * and Facebook's position "New for you • 4 of 8".
+     */
+    private val SPELLED_COUNT = Regex("""number is \d|\d[\d.,]*\s*times\b|\b\d+ of \d+\b""")
 
     /**
      * "1.4m", "14k", "13,275 comments", "0:12", "3 days ago" change while a reel plays, so they can't
@@ -99,14 +105,20 @@ object ReelDetector {
     private fun isCounterOrTimer(lower: String): Boolean {
         val digits = lower.count { it.isDigit() }
         if (digits == 0) return false
-        if (COUNT_WORDS.containsMatchIn(lower) || TIMER.containsMatchIn(lower)) return true
+        if (COUNT_WORDS.containsMatchIn(lower) || TIMER.containsMatchIn(lower) || SPELLED_COUNT.containsMatchIn(lower)) return true
         val meaningful = lower.count { !it.isWhitespace() }
         return digits * 10 >= meaningful * 4 // mostly digits, e.g. "1,204" or "12.5"
     }
 
-    /** Stable id for a reel, used to remember it for the rest of the day. */
-    fun key(texts: Collection<String>): String =
-        texts.sortedByDescending { it.length }.take(4).sorted().joinToString("|").hashCode().toString(16)
+    /**
+     * Stable id for a reel, used to remember it for the rest of the day. Built from the reel's longest texts,
+     * leaving out the music line ("Artist · Song"): it scrolls across the screen and is only readable on
+     * some visits, so including it made the same reel look new when scrolling back to it.
+     */
+    fun key(texts: Collection<String>): String {
+        val stable = texts.filterNot { it.contains(" · ") }.ifEmpty { texts }
+        return stable.sortedByDescending { it.length }.take(4).sorted().joinToString("|").hashCode().toString(16)
+    }
 
     /** How much two reels' texts overlap, from 0 (nothing shared) to 1 (identical). */
     fun overlap(a: Collection<String>, b: Collection<String>): Double {

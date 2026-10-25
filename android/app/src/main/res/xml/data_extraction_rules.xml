@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android Auto Backup: copies Brain Buddy's data to the user's own Google Drive and restores it on a new phone. -->
+<!-- Android Auto Backup: copies Brain Bean's data to the user's own Google Drive and restores it on a new phone. -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="." />

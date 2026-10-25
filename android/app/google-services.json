@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:278232562794:android:e9132143821b1905a01e13",
+        "mobilesdk_app_id": "1:278232562794:android:74045669fef4d264a01e13",
         "android_client_info": {
-          "package_name": "com.brainbuddy.app"
+          "package_name": "com.brainbean.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "278232562794-tcgm1k601dvj6qc1goqb3i2n236cu5jh.apps.googleusercontent.com",
+          "client_id": "278232562794-j1b7mr6snpvihlom9o717q1fgl931bhk.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.brainbuddy.app",
+            "package_name": "com.brainbean.app",
             "certificate_hash": "3e96ff97204d8e5f77f9ee604a1ca1dc852a70b6"
           }
         },

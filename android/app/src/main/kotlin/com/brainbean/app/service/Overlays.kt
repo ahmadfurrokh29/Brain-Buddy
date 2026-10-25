@@ -1,4 +1,4 @@
-package com.brainbuddy.app.service
+package com.brainbean.app.service
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -20,12 +20,14 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.brainbuddy.app.core.Mood
+import com.brainbean.app.core.Mood
 
 /**
  * Pop-ups drawn over the reel apps. They use the accessibility overlay window type,
@@ -37,9 +39,10 @@ class Overlays(private val ctx: Context) {
 
     private var counter: LinearLayout? = null
     private var counterBrain: BrainView? = null
-    private var counterText: TextView? = null
+    private var counterNumber: FrameLayout? = null
     private var counterParams: WindowManager.LayoutParams? = null
     private var lastWatched = -1
+    private val closeMouth = Runnable { counterBrain?.closeMouth() }
     private val positions = ctx.getSharedPreferences("bb_overlay", Context.MODE_PRIVATE)
     private var lock: View? = null
     private var intent: View? = null
@@ -50,34 +53,35 @@ class Overlays(private val ctx: Context) {
 
     // ---------------------------------------------------------------- floating counter
 
-    /** Bubble with the animated brain and today's count. The user can drag it anywhere; the spot is remembered. */
+    /**
+     * The brain on its own with today's count under it. It opens its mouth when a new reel comes up and
+     * gulps when the reel counts. The user can drag it anywhere; the spot is remembered.
+     */
     fun showCounter(watched: Int, budget: Int) {
         if (counter == null) {
-            val brain = BrainView(ctx).apply { deep = true }
-            val text = TextView(ctx).apply {
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(INK)
-            }
-            val bubble = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(4), dp(3), dp(12), dp(3))
-                elevation = dp(4).toFloat()
-                addView(brain, LinearLayout.LayoutParams(dp(38), dp(38)))
-                addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(2) })
+            val brain = BrainView(ctx).apply { shadow = true }
+            // The number flies up into the brain's mouth, outside its own box, so nothing may clip it.
+            val number = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
+            val column = LinearLayout(ctx).apply {
+                clipChildren = false
+                clipToPadding = false
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(dp(4), dp(2), dp(4), dp(2))
+                addView(brain, LinearLayout.LayoutParams(dp(44), dp(44)))
+                addView(number, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(20)))
             }
             val metrics = ctx.resources.displayMetrics
             val lp = baseParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = positions.getInt("x", metrics.widthPixels - dp(132))
+                x = positions.getInt("x", metrics.widthPixels - dp(76))
                 y = positions.getInt("y", dp(96))
             }
-            enableDragging(bubble, lp)
-            if (!add(bubble, lp)) return
-            counter = bubble
+            enableDragging(column, lp)
+            if (!add(column, lp)) return
+            counter = column
             counterBrain = brain
-            counterText = text
+            counterNumber = number
             counterParams = lp
             lastWatched = -1
         }
@@ -85,33 +89,83 @@ class Overlays(private val ctx: Context) {
     }
 
     fun updateCounter(watched: Int, budget: Int) {
-        val bubble = counter ?: return
-        val mood = Mood.of(watched, budget)
-        counterBrain?.mood = mood
-        counterText?.text = "$watched/$budget"
-        // A light, slightly see-through shade of the brain's colour, so the stronger-coloured brain stands
-        // out against it, with a border in the brain's darker outline colour.
-        bubble.background = GradientDrawable().apply {
-            cornerRadius = dp(28).toFloat()
-            setColor(towardWhite(mood.top, 0.75f, alpha = 235))
-            setStroke(dp(2), mood.outline)
-        }
-        if (lastWatched in 0 until watched) counterBrain?.poke()
+        counter ?: return
+        counterBrain?.mood = Mood.of(watched, budget)
+        val counted = lastWatched in 0 until watched
+        if (counted) main.removeCallbacks(closeMouth)
+        setNumber("$watched/$budget", eat = counted)
         lastWatched = watched
     }
 
+    /**
+     * A new reel came up: the brain opens its mouth. If the reel isn't counted within [waitMs]
+     * (skipped too fast, or an ad), the mouth closes again without a gulp.
+     */
+    fun counterSawSwipe(waitMs: Long) {
+        val brain = counterBrain ?: return
+        brain.openMouth()
+        main.removeCallbacks(closeMouth)
+        main.postDelayed(closeMouth, waitMs)
+    }
+
+    /**
+     * Shows the count under the brain. [eat]: the brain eats the old number. It flies up into the open mouth,
+     * shrinking like something moving far away; the mouth shuts as it arrives, then the new number pops in.
+     */
+    private fun setNumber(text: String, eat: Boolean) {
+        val box = counterNumber ?: return
+        val brain = counterBrain
+        // Already showing (or eating its way to) this number: a repeat refresh must not cut the animation short.
+        if ((box.getChildAt(box.childCount - 1) as? TextView)?.text == text) return
+        // A new count arriving mid-animation: finish the previous one at once.
+        while (box.childCount > 1) box.getChildAt(0).let { it.animate().cancel(); box.removeView(it) }
+        val old = box.getChildAt(0) as? TextView
+        val label = TextView(ctx).apply {
+            this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            // Dark outline-like shadow keeps the white number readable on any video.
+            setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.argb(200, 0, 0, 0))
+        }
+        box.addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        if (old == null || !eat || brain == null) {
+            old?.let { box.removeView(it) }
+            brain?.takeIf { eat }?.gulp()
+            return
+        }
+        brain.openMouth() // in case the swipe wasn't seen
+        // From the number's centre up to the mouth (61% down the brain).
+        val numberCentre = box.top + box.height / 2f
+        val mouth = brain.top + brain.height * 0.61f
+        old.animate()
+            .translationY(mouth - numberCentre)
+            .scaleX(0.08f).scaleY(0.08f)
+            .alpha(0.2f)
+            .setDuration(EAT_MS)
+            .setInterpolator(AccelerateInterpolator(1.4f))
+            .withEndAction {
+                box.removeView(old)
+                brain.gulp()
+            }
+            .start()
+        // The new number grows from tiny to full size, the opposite of the old one being eaten.
+        label.alpha = 0f
+        label.scaleX = 0.1f
+        label.scaleY = 0.1f
+        label.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setStartDelay(EAT_MS - 60).setDuration(GROW_MS)
+            .setInterpolator(DecelerateInterpolator(1.4f))
+            .start()
+    }
+
     fun hideCounter() {
+        main.removeCallbacks(closeMouth)
         counter?.let { remove(it) }
         counter = null
         counterBrain = null
-        counterText = null
+        counterNumber = null
         counterParams = null
-    }
-
-    /** Mixes [color] with white by [amount] (0 = unchanged, 1 = white). */
-    private fun towardWhite(color: Int, amount: Float, alpha: Int): Int {
-        fun mix(c: Int) = (c + (255 - c) * amount).toInt()
-        return Color.argb(alpha, mix(Color.red(color)), mix(Color.green(color)), mix(Color.blue(color)))
     }
 
     private fun enableDragging(view: View, lp: WindowManager.LayoutParams) {
@@ -169,7 +223,7 @@ class Overlays(private val ctx: Context) {
     private var gentleReadyAt = 0L
 
     /**
-     * Firm lock: wait [waitSec] seconds, then "Write a reason for 5 more" opens Brain Buddy's reason screen
+     * Firm lock: wait [waitSec] seconds, then "Write a reason for 5 more" opens Brain Bean's reason screen
      * ([onAskReason]). Typing happens there, in a normal app screen, because Samsung phones draw the navigation
      * buttons invisible when a pop-up like this one has the keyboard.
      */
@@ -448,6 +502,10 @@ class Overlays(private val ctx: Context) {
         val INK = Color.parseColor("#1B2430")
         val GREY = Color.parseColor("#5B6573")
         private const val GENTLE_BREATH_MS = 8000L
+        /** How long the brain takes to eat the old number. */
+        private const val EAT_MS = 500L
+        /** How long the new number takes to grow in. */
+        private const val GROW_MS = 350L
         private const val GENTLE_FORGET_MS = 30 * 60 * 1000L
     }
 }

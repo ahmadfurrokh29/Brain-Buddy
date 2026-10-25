@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.content.Context
 import android.util.Log
@@ -12,7 +12,7 @@ import java.util.Locale
 
 /**
  * Sends this week's reel count to every Squad the user is in. Runs from the background counter,
- * so friends see fresh numbers even if the user never opens Brain Buddy (BrainPal's "friend shows 0").
+ * so friends see fresh numbers even if the user never opens Brain Bean (BrainPal's "friend shows 0").
  * Only counts are shared: never which reels, apps or times.
  */
 object SquadSync {

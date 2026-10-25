@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -18,7 +18,7 @@ class Config(context: Context) {
         set(v) = prefs.edit().putStringSet(KEY_TRACKED, v).apply()
 
     val budget get() = prefs.getInt("budget", 30)
-    val dwellSec get() = prefs.getInt("dwellSec", 3)
+    val dwellSec get() = prefs.getInt("dwellSec", 1)
     val showSkimmed get() = prefs.getBoolean("showSkimmed", true)
     val ignoreAds get() = prefs.getBoolean("ignoreAds", true)
     val dayStartHour get() = prefs.getInt("dayStartHour", 0)
@@ -198,12 +198,17 @@ class Config(context: Context) {
     }
 
     /** Back up day summaries and settings to the signed-in Google account. */
-    val cloudBackup get() = prefs.getBoolean("cloudBackup", true)
+    val cloudBackup get() = prefs.getBoolean("cloudBackup", false)
 
     /** Last day already uploaded; days after it (and it, since it may have grown) are uploaded next time. */
     var lastBackupDay: String
         get() = prefs.getString("lastBackupDay", "") ?: ""
         set(v) = prefs.edit().putString("lastBackupDay", v).apply()
+
+    /** The account [lastBackupDay] belongs to. Another account on this phone starts again from the first day. */
+    var lastBackupUid: String
+        get() = prefs.getString("lastBackupUid", "") ?: ""
+        set(v) = prefs.edit().putString("lastBackupUid", v).apply()
 
     /** Squads the signed-in user belongs to; the counter syncs counts to each. */
     val squadIds: List<String> get() = prefs.getStringSet("squadIds", emptySet())!!.toList()

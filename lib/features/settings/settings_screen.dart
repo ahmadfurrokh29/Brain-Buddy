@@ -50,22 +50,19 @@ class _SettingsBody extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.apps_rounded),
             title: const Text('Apps to track'),
-            subtitle: Text(_trackedNames(ref, c)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _pickApps(context, ref, c),
           ),
           ListTile(
             leading: const Icon(Icons.timer_outlined),
             title: const Text('Watch time to count'),
-            subtitle: const Text('A reel counts only if you stay on it this long'),
-            trailing: _Choice<int>(value: c.dwellSec, options: const [1, 2, 3, 5, 7, 10], label: (v) => '$v sec', onChanged: (v) => cfg.set({'dwellSec': v})),
+            trailing: BBDropdown<int>(value: c.dwellSec.clamp(1, 5), options: const [1, 2, 3, 4, 5], label: (v) => '$v sec', onChanged: (v) => cfg.set({'dwellSec': v})),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.fast_forward_rounded),
             value: c.showSkimmed,
             onChanged: (v) => cfg.set({'showSkimmed': v}),
             title: const Text('Show skimmed reels'),
-            subtitle: const Text('Quick flicks shown as a separate number'),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.campaign_outlined),
@@ -77,8 +74,7 @@ class _SettingsBody extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.wb_twilight_rounded),
             title: const Text('New day starts at'),
-            subtitle: const Text('Night owl? Start your day later'),
-            trailing: _Choice<int>(
+            trailing: BBDropdown<int>(
               value: c.dayStartHour,
               options: const [0, 2, 4, 6],
               label: (v) => v == 0 ? '12 am' : '$v am',
@@ -98,7 +94,6 @@ class _SettingsBody extends ConsumerWidget {
             value: c.floatingCounter,
             onChanged: (v) => cfg.set({'floatingCounter': v}),
             title: const Text('Floating counter'),
-            subtitle: const Text('Small bubble with your count while watching reels'),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.psychology_alt_outlined),
@@ -112,7 +107,7 @@ class _SettingsBody extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.palette_outlined),
             title: const Text('Theme'),
-            trailing: _Choice<ThemeMode>(
+            trailing: BBDropdown<ThemeMode>(
               value: themeMode,
               options: ThemeMode.values,
               label: (m) => switch (m) { ThemeMode.system => 'Same as phone', ThemeMode.light => 'Light', ThemeMode.dark => 'Dark' },
@@ -125,10 +120,11 @@ class _SettingsBody extends ConsumerWidget {
         _Group(children: [
           ListTile(
             leading: const Icon(Icons.workspace_premium_rounded, color: Color(0xFFE0A800)),
-            title: const Text('Brain Buddy Pro'),
+            title: const Text('Brain Bean Pro'),
             subtitle: Text(kBetaAllPro ? 'All Pro features are free during the beta' : 'Locks, schedules, insights and more'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => context.push('/pro'),
+            // While everything is free in the beta there is nothing to buy, so the row only informs.
+            trailing: kBetaAllPro ? null : const Icon(Icons.chevron_right_rounded),
+            onTap: kBetaAllPro ? null : () => context.push('/pro'),
           ),
         ]),
         const SectionTitle('Privacy & data'),
@@ -182,12 +178,6 @@ class _SettingsBody extends ConsumerWidget {
     );
   }
 
-  String _trackedNames(WidgetRef ref, AppConfig c) {
-    final targets = ref.watch(targetsProvider).value ?? const [];
-    final names = targets.where((a) => a.pkgs.any(c.tracked.contains)).map((a) => a.name).toList();
-    return names.isEmpty ? 'None' : names.join(', ');
-  }
-
   Future<void> _pickApps(BuildContext context, WidgetRef ref, AppConfig c) async {
     final targets = await ref.read(targetsProvider.future);
     final selected = targets.where((a) => a.pkgs.any(c.tracked.contains)).map((a) => a.name).toSet();
@@ -226,7 +216,7 @@ class _SettingsBody extends ConsumerWidget {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/brain_buddy_backup_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.json');
       await file.writeAsString(json);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], title: 'Brain Buddy backup'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], title: 'Brain Bean backup'));
     } catch (e) {
       if (context.mounted) showSnack(context, 'Backup failed: $e');
     }
@@ -238,7 +228,7 @@ class _SettingsBody extends ConsumerWidget {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/brain_buddy_reels_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv');
       await file.writeAsString(csv);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'text/csv')], title: 'Brain Buddy reels'));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'text/csv')], title: 'Brain Bean reels'));
     } catch (e) {
       if (context.mounted) showSnack(context, 'Export failed: $e');
     }
@@ -254,7 +244,7 @@ class _SettingsBody extends ConsumerWidget {
       refreshAll(ref);
       if (context.mounted) showSnack(context, 'Backup restored ✅');
     } catch (e) {
-      if (context.mounted) showSnack(context, 'That file could not be restored. Is it a Brain Buddy backup?');
+      if (context.mounted) showSnack(context, 'That file could not be restored. Is it a Brain Bean backup?');
     }
   }
 
@@ -282,27 +272,40 @@ class _SettingsBody extends ConsumerWidget {
   }
 
   void _showPrivacy(BuildContext context) {
+    const heading = TextStyle(fontSize: 18, fontWeight: FontWeight.w800);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useRootNavigator: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('What Brain Buddy keeps', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            SizedBox(height: 12),
-            Text('• How many reels you watched or skimmed, in which app, and when'),
-            Text('• Minutes spent on reel screens'),
-            Text('• Your answers to "Why are you here?"'),
-            Text('• Your settings'),
-            SizedBox(height: 12),
-            Text('What it never keeps', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            SizedBox(height: 12),
-            Text('• Messages, passwords or anything you type'),
-            Text('• Screenshots or the content of reels'),
-            Text('• Anything from apps you did not pick'),
-            SizedBox(height: 12),
-            Text('All of it stays on this phone. Nothing is uploaded.', style: TextStyle(color: context.muted)),
+            const Text('On this phone', style: heading),
+            const SizedBox(height: 8),
+            const Text('• How many reels you watched or skimmed, in which app, and when'),
+            const Text('• Minutes spent on reel screens'),
+            const Text('• Your answers to "Why are you here?"'),
+            const Text('• Your settings'),
+            const SizedBox(height: 16),
+            const Text('Shared only if you use it', style: heading),
+            const SizedBox(height: 8),
+            const Text('• Squads: your nickname, avatar and reel counts (this week and today) are shown to your squad. '
+                'Never which reels, apps or times.'),
+            const Text('• Cloud backup (off unless you turn it on): your daily totals and settings, saved to your '
+                'Google account.'),
+            const Text('• Nudges: a push address, so squad friends can send you a nudge.'),
+            const Text('• Crash reports (you can turn them off): technical details when the app crashes.'),
+            const SizedBox(height: 16),
+            const Text('Never collected', style: heading),
+            const SizedBox(height: 8),
+            const Text('• Messages, passwords or anything you type'),
+            const Text('• Screenshots or the content of reels'),
+            const Text('• Anything from apps you did not pick'),
+            const SizedBox(height: 16),
+            Text('You can delete your online account and everything in it anytime: Settings → Delete online account.',
+                style: TextStyle(color: context.muted)),
           ]),
         ),
       ),
@@ -316,25 +319,4 @@ class _Group extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BBCard(padding: EdgeInsets.zero, child: Column(children: children));
-}
-
-class _Choice<T> extends StatelessWidget {
-  final T value;
-  final List<T> options;
-  final String Function(T) label;
-  final ValueChanged<T> onChanged;
-
-  const _Choice({required this.value, required this.options, required this.label, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButton<T>(
-      value: value,
-      underline: const SizedBox.shrink(),
-      items: options.map((o) => DropdownMenuItem(value: o, child: Text(label(o)))).toList(),
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
-    );
-  }
 }

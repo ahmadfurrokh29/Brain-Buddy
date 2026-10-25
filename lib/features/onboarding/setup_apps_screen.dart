@@ -38,7 +38,7 @@ class _SetupAppsScreenState extends ConsumerState<SetupAppsScreen> {
             children: [
               Text('Which apps do you scroll?', style: t.headlineSmall),
               const SizedBox(height: 4),
-              Text('Brain Buddy only looks at the apps you pick.', style: t.bodyMedium?.copyWith(color: context.muted)),
+              Text('Brain Bean only looks at the apps you pick.', style: t.bodyMedium?.copyWith(color: context.muted)),
               const SizedBox(height: 16),
               BBCard(
                 padding: EdgeInsets.zero,

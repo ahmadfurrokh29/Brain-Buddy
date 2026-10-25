@@ -39,10 +39,23 @@ class _SquadDetailScreenState extends ConsumerState<SquadDetailScreen> {
         actions: [
           if (s != null)
             PopupMenuButton<String>(
-              onSelected: (v) => v == 'leave' ? _leave(s) : _rename(s),
+              // Same plain white card as the Settings dropdowns, instead of the mint-tinted default.
+              color: Theme.of(context).canvasColor,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onSelected: (v) => switch (v) {
+                'leave' => _leave(s),
+                'delete' => _delete(s),
+                _ => _rename(s),
+              },
               itemBuilder: (_) => [
                 if (s.ownerUid == uid) const PopupMenuItem(value: 'rename', child: Text('Rename squad')),
                 const PopupMenuItem(value: 'leave', child: Text('Leave squad', style: TextStyle(color: BB.coral))),
+                if (s.ownerUid == uid)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete squad', style: TextStyle(color: BB.coral, fontWeight: FontWeight.w700)),
+                  ),
               ],
             ),
         ],
@@ -72,6 +85,32 @@ class _SquadDetailScreenState extends ConsumerState<SquadDetailScreen> {
     if (ok != true) return;
     await ref.read(squadsRepoProvider).leave(s);
     if (mounted) context.pop();
+  }
+
+  Future<void> _delete(Squad s) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${s.name}?'),
+        content: const Text('The squad, its leaderboard and its invite code are removed for everyone. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: BB.coral, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(squadsRepoProvider).deleteSquad(s);
+      if (!mounted) return;
+      showSnack(context, '${s.name} deleted');
+      context.pop();
+    } catch (_) {
+      if (mounted) showSnack(context, 'Could not delete the squad. Check your internet.');
+    }
   }
 
   Future<void> _rename(Squad s) async {
@@ -161,8 +200,8 @@ class _Board extends ConsumerWidget {
               Expanded(
                 child: FilledButton.icon(
                   onPressed: () => SharePlus.instance.share(ShareParams(
-                    text: 'Join my Brain Buddy squad "${squad.name}" and let\'s scroll less together! '
-                        'Open Brain Buddy → Squads → Join with code: ${squad.code}',
+                    text: 'Join my Brain Bean squad "${squad.name}" and let\'s scroll less together! '
+                        'Open Brain Bean → Squads → Join with code: ${squad.code}',
                   )),
                   icon: const Icon(Icons.share_rounded),
                   label: const Text('Share'),

@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 /**
  * A short-video app we can track.

@@ -1,4 +1,4 @@
-package com.brainbuddy.app
+package com.brainbean.app
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -16,14 +16,14 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
-import com.brainbuddy.app.core.CloudBackup
-import com.brainbuddy.app.core.Config
-import com.brainbuddy.app.core.CountBus
-import com.brainbuddy.app.core.Db
-import com.brainbuddy.app.core.SquadSync
-import com.brainbuddy.app.core.TargetApps
-import com.brainbuddy.app.service.ReelCounterService
-import com.brainbuddy.app.widget.BrainWidgetProvider
+import com.brainbean.app.core.CloudBackup
+import com.brainbean.app.core.Config
+import com.brainbean.app.core.CountBus
+import com.brainbean.app.core.Db
+import com.brainbean.app.core.SquadSync
+import com.brainbean.app.core.TargetApps
+import com.brainbean.app.service.ReelCounterService
+import com.brainbean.app.widget.BrainWidgetProvider
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -107,6 +107,7 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             config.toMap()
         }
         "localDays" -> db.daysWithData().size
+        "sinceLaunch" -> android.os.SystemClock.elapsedRealtime() - MainActivity.createdAt
         "syncSquads" -> {
             SquadSync.sync(activity, force = true)
             true
@@ -194,8 +195,8 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
     }
 
     /**
-     * Shows Android's own "Allow Brain Buddy to always run in the background?" dialog.
-     * The settings list we used before hides apps that are still optimised, so users couldn't find Brain Buddy.
+     * Shows Android's own "Allow Brain Bean to always run in the background?" dialog.
+     * The settings list we used before hides apps that are still optimised, so users couldn't find Brain Bean.
      */
     @SuppressLint("BatteryLife")
     private fun requestBatteryExemption(): Boolean {
@@ -211,7 +212,7 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
         Build.VERSION.SDK_INT >= 28 && activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted
 
     /**
-     * The real launcher icons of installed reel apps, as PNG bytes. Taken from the phone, so Brain Buddy
+     * The real launcher icons of installed reel apps, as PNG bytes. Taken from the phone, so Brain Bean
      * doesn't ship other companies' logos and the icons always match the installed version.
      */
     private fun appIcons(): Map<String, ByteArray> {

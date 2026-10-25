@@ -24,7 +24,7 @@ class PatternsSection extends ConsumerWidget {
         data: (p) {
           if (p.total < kMinReelsForTriggers) {
             return BBCard(
-              child: Text('Keep using Brain Buddy for a few days and your weak moments will show up here.',
+              child: Text('Keep using Brain Bean for a few days and your weak moments will show up here.',
                   style: TextStyle(color: context.muted)),
             );
           }

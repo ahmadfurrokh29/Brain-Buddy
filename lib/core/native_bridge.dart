@@ -28,6 +28,8 @@ class NativeBridge {
   Future<void> restoreSettings(Map<String, Object?> config) => _method.invokeMethod('restoreSettings', config);
 
   /// How many days have data on this phone.
+  /// Milliseconds since Brain Bean's screen was opened (the user's tap), for timing the splash.
+  Future<int> sinceLaunch() async => (await _method.invokeMethod<int>('sinceLaunch')) ?? 0;
   Future<int> localDays() async => (await _method.invokeMethod<int>('localDays')) ?? 0;
 
   /// Sends this week's counts to the user's Squads now.

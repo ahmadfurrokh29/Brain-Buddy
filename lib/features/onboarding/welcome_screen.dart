@@ -100,7 +100,7 @@ class _SlideCounter extends StatelessWidget {
         ]),
       ),
       title: 'You scroll more than you think',
-      body: 'Most people scroll far more reels than they guess. Brain Buddy shows you the real number, live.',
+      body: 'Most people scroll far more reels than they guess. Brain Bean shows you the real number, live.',
     );
   }
 }
@@ -125,8 +125,8 @@ class _SlideMoods extends StatelessWidget {
             ),
         ]),
       ]),
-      title: 'Watch your brain buddy react',
-      body: 'Your buddy is fresh in the morning and gets tired the more you scroll. On good days it heals.',
+      title: 'Watch your brain bean react',
+      body: 'Your brain bean is fresh in the morning and gets tired the more you scroll. On good days it heals.',
     );
   }
 }

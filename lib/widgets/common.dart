@@ -27,8 +27,10 @@ class StatusPill extends StatelessWidget {
   final Color color;
   final IconData icon;
   final VoidCallback? onTap;
+  /// Smaller pill with a small dot, for tight headers.
+  final bool compact;
 
-  const StatusPill({super.key, required this.label, required this.color, required this.icon, this.onTap});
+  const StatusPill({super.key, required this.label, required this.color, required this.icon, this.onTap, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +41,11 @@ class StatusPill extends StatelessWidget {
         customBorder: const StadiumBorder(),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: compact ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4) : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+            Icon(icon, size: compact ? 10 : 16, color: color),
+            SizedBox(width: compact ? 5 : 6),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: compact ? 12 : 13)),
           ]),
         ),
       ),
@@ -154,4 +156,35 @@ void showSnack(BuildContext context, String message) {
         Expanded(child: Text(message)),
       ]),
     ));
+}
+
+/// The app's dropdown: plain value with a mint arrow; opens as a rounded white list with the chosen
+/// option in light mint (Flutter paints the chosen row with the theme's focus colour).
+class BBDropdown<T> extends StatelessWidget {
+  final T value;
+  final List<T> options;
+  final String Function(T) label;
+  final ValueChanged<T> onChanged;
+
+  const BBDropdown({super.key, required this.value, required this.options, required this.label, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(focusColor: BB.mint.withValues(alpha: context.isDark ? 0.22 : 0.14)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          borderRadius: BorderRadius.circular(16),
+          elevation: 4,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: BB.mint),
+          items: options.map((o) => DropdownMenuItem(value: o, child: Text(label(o)))).toList(),
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      ),
+    );
+  }
 }

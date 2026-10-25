@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/models.dart';
 import '../theme/app_theme.dart';
 
-/// The Brain Buddy mascot, drawn in code.
+/// The Brain Bean mascot, drawn in code.
 ///
 /// It bobs gently, blinks, wobbles when [count] goes up and changes face with [mood].
 /// Built so it can later be swapped for a Rive animation without touching the screens.

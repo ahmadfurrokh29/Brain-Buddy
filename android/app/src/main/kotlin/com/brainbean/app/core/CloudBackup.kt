@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.content.Context
 import android.util.Log
@@ -27,8 +27,8 @@ object CloudBackup {
 
         val db = Db.get(context)
         val today = config.today(now)
-        val from = config.lastBackupDay
-        // First time: everything. Afterwards: from the last uploaded day (it may have grown) to today.
+        // First time for this account: everything. Afterwards: from the last uploaded day (it may have grown) to today.
+        val from = if (config.lastBackupUid == user.uid) config.lastBackupDay else ""
         val days = db.daysWithData().filter { from.isEmpty() || it >= from } + today
         val userDoc = FirebaseFirestore.getInstance().collection("users").document(user.uid)
         val batch = FirebaseFirestore.getInstance().batch()
@@ -41,7 +41,12 @@ object CloudBackup {
         }
         batch.set(userDoc.collection("backup").document("settings"), mapOf("config" to config.toMap(), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit()
-            .addOnSuccessListener { if (writes < 400) config.lastBackupDay = today }
+            .addOnSuccessListener {
+                if (writes < 400) {
+                    config.lastBackupDay = today
+                    config.lastBackupUid = user.uid
+                }
+            }
             .addOnFailureListener { Log.w("BrainBuddy", "Cloud backup failed: ${it.message}") }
     }
 }

@@ -1,9 +1,9 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.graphics.Color
 
 /**
- * Brain buddy's mood from how much of today's budget is used. Same thresholds and brain colours as
+ * Brain bean's mood from how much of today's budget is used. Same thresholds and brain colours as
  * the Flutter side (lib/core/models.dart): the brain itself changes colour as it gets more tired.
  */
 enum class Mood(val emoji: String, val label: String, body: String, top: String, outline: String) {

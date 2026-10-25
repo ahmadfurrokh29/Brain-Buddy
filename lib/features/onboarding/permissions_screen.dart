@@ -61,7 +61,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         children: [
-          Text('Let Brain Buddy count', style: t.headlineSmall),
+          Text('Let Brain Bean count', style: t.headlineSmall),
           const SizedBox(height: 4),
           Text('Android needs your OK for a few things. We explain each one.', style: t.bodyMedium?.copyWith(color: context.muted)),
           const SizedBox(height: 16),
@@ -69,7 +69,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
             icon: Icons.accessibility_new_rounded,
             title: 'Accessibility',
             tag: 'Required',
-            body: 'Lets Brain Buddy notice when you scroll reels in the apps you picked. '
+            body: 'Lets Brain Bean notice when you scroll reels in the apps you picked. '
                 'We never read messages, passwords or banking apps.',
             done: status?.accessibility ?? false,
             actionLabel: 'Turn on',
@@ -80,7 +80,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
             title: 'Battery',
             tag: 'Recommended',
             body: (status?.battery ?? false) && (status?.backgroundRestricted ?? false)
-                ? 'Brain Buddy is restricted in the background. In App info → Battery, turn ON "Allow background activity".'
+                ? 'Brain Bean is restricted in the background. In App info → Battery, turn ON "Allow background activity".'
                 : 'Some phones stop apps in the background. Tap Allow on the next pop-up so the counter keeps working.',
             done: status?.batteryOk ?? false,
             actionLabel: (status?.battery ?? false) ? 'Open app info' : 'Allow',
@@ -113,7 +113,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> with Widg
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             FilledButton(
               onPressed: (status?.accessibility ?? false) ? _finish : null,
-              child: const Text('All done — start Brain Buddy'),
+              child: const Text('All done — start Brain Bean'),
             ),
             TextButton(onPressed: _finish, child: const Text('Skip for now')),
           ]),
@@ -193,15 +193,15 @@ class _AccessibilityDisclosure extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('How Brain Buddy uses Accessibility', style: t.titleLarge),
+          Text('How Brain Bean uses Accessibility', style: t.titleLarge),
           const SizedBox(height: 16),
           point(Icons.check_circle_rounded, BB.mint,
-              'Brain Buddy uses the Accessibility Service to see when you scroll reels and shorts in the apps you chose, so it can count them.'),
+              'Brain Bean uses the Accessibility Service to see when you scroll reels and shorts in the apps you chose, so it can count them.'),
           point(Icons.check_circle_rounded, BB.mint, 'It also uses it to show your counter, the reel limit screen and the "Why are you here?" pause on top of those apps.'),
           point(Icons.cancel_rounded, BB.coral, 'It does not read your messages, passwords, typing, or any other app such as banking.'),
           point(Icons.cancel_rounded, BB.coral, 'Nothing is uploaded. Your counts stay on this phone.'),
           const SizedBox(height: 8),
-          Text('On the next screen tap "Brain Buddy reel counter" (it may be under "Installed apps" or "Downloaded apps") and switch it on.',
+          Text('On the next screen tap "Brain Bean reel counter" (it may be under "Installed apps" or "Downloaded apps") and switch it on.',
               style: t.bodySmall?.copyWith(color: context.muted)),
           const SizedBox(height: 16),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('I agree — open settings')),

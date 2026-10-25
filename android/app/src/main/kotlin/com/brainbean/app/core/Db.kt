@@ -1,4 +1,4 @@
-package com.brainbuddy.app.core
+package com.brainbean.app.core
 
 import android.content.ContentValues
 import android.content.Context
@@ -294,7 +294,7 @@ class Db private constructor(context: Context) :
     /** Replaces all data with a backup. Returns the backup's config so it can be restored too. */
     fun importJson(json: String): Map<String, Any?> {
         val root = JSONObject(json)
-        require(root.optString("format") == "brain_buddy_backup") { "Not a Brain Buddy backup file" }
+        require(root.optString("format") == "brain_buddy_backup") { "Not a Brain Bean backup file" }
         val w = writableDatabase
         w.beginTransaction()
         try {

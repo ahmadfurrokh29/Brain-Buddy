@@ -78,7 +78,7 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                       ok: !s.killed,
                       title: 'Counter running',
                       body: s.killed
-                          ? 'Android stopped the counter. Turn Brain Buddy off and on again in Accessibility settings.'
+                          ? 'Android stopped the counter. Turn Brain Bean off and on again in Accessibility settings.'
                           : 'The counter is alive.',
                       onFix: bridge.openAccessibilitySettings,
                     ),
@@ -94,16 +94,16 @@ class _DoctorScreenState extends ConsumerState<DoctorScreen> with WidgetsBinding
                       ok: !s.backgroundRestricted,
                       title: 'Background activity allowed',
                       body: s.backgroundRestricted
-                          ? 'Brain Buddy is restricted in the background. Tap Fix → Battery → turn ON "Allow background activity" '
+                          ? 'Brain Bean is restricted in the background. Tap Fix → Battery → turn ON "Allow background activity" '
                               '(Samsung: also remove it from "Sleeping apps").'
-                          : 'Brain Buddy may run in the background.',
+                          : 'Brain Bean may run in the background.',
                       onFix: bridge.openAppSettings,
                     ),
                     if (brand.hasAutostart)
                       _Check(
                         ok: null,
                         title: 'Autostart allowed',
-                        body: '${brand.name} phones need Autostart turned on for Brain Buddy. We can\'t check this one for you.',
+                        body: '${brand.name} phones need Autostart turned on for Brain Bean. We can\'t check this one for you.',
                         onFix: bridge.openAutostartSettings,
                       ),
                     _Check(
@@ -194,42 +194,42 @@ class _Brand {
   const _Brand(this.name, this.hasAutostart, this.tips);
 
   static _Brand of(String manufacturer) {
-    const common = 'Settings → Apps → Brain Buddy → Battery → "Unrestricted".';
+    const common = 'Settings → Apps → Brain Bean → Battery → "Unrestricted".';
     switch (manufacturer) {
       case 'xiaomi':
       case 'redmi':
       case 'poco':
         return const _Brand('Xiaomi', true, [
-          'Security app → Permissions → Autostart → turn on Brain Buddy.',
-          'Settings → Apps → Brain Buddy → Battery saver → "No restrictions".',
-          'Open Recent apps, pull Brain Buddy down a little and tap the lock icon.',
+          'Security app → Permissions → Autostart → turn on Brain Bean.',
+          'Settings → Apps → Brain Bean → Battery saver → "No restrictions".',
+          'Open Recent apps, pull Brain Bean down a little and tap the lock icon.',
         ]);
       case 'oppo':
       case 'realme':
       case 'oneplus':
         return _Brand(manufacturer[0].toUpperCase() + manufacturer.substring(1), true, const [
-          'Settings → Apps → Brain Buddy → Battery usage → allow "Background activity" and "Auto launch".',
-          'Open Recent apps and lock Brain Buddy so it is never cleared.',
-          'If the counter still stops, turn Brain Buddy off and on in Accessibility.',
+          'Settings → Apps → Brain Bean → Battery usage → allow "Background activity" and "Auto launch".',
+          'Open Recent apps and lock Brain Bean so it is never cleared.',
+          'If the counter still stops, turn Brain Bean off and on in Accessibility.',
         ]);
       case 'vivo':
       case 'iqoo':
         return const _Brand('Vivo', true, [
-          'i Manager → App manager → Autostart manager → allow Brain Buddy.',
-          'Settings → Battery → Background power consumption → allow Brain Buddy.',
+          'i Manager → App manager → Autostart manager → allow Brain Bean.',
+          'Settings → Battery → Background power consumption → allow Brain Bean.',
         ]);
       case 'huawei':
       case 'honor':
         return const _Brand('Huawei', true, [
-          'Settings → Battery → App launch → Brain Buddy → "Manage manually" and allow all three options.',
+          'Settings → Battery → App launch → Brain Bean → "Manage manually" and allow all three options.',
         ]);
       case 'samsung':
         return const _Brand('Samsung', false, [
           common,
-          'Settings → Battery → Background usage limits → make sure Brain Buddy is not in "Sleeping apps".',
+          'Settings → Battery → Background usage limits → make sure Brain Bean is not in "Sleeping apps".',
         ]);
       default:
-        return const _Brand('Your', false, [common, 'If the counter stops, turn Brain Buddy off and on in Accessibility settings.']);
+        return const _Brand('Your', false, [common, 'If the counter stops, turn Brain Bean off and on in Accessibility settings.']);
     }
   }
 }

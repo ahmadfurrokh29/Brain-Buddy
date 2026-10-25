@@ -81,7 +81,7 @@ final streakProvider = FutureProvider<int>((ref) async {
   final days = await ref.watch(daysProvider(60).future);
   final config = await ref.watch(configProvider.future);
   if (days.isEmpty) return 0;
-  // Days before the first counted reel were before Brain Buddy was installed: they don't count.
+  // Days before the first counted reel were before Brain Bean was installed: they don't count.
   var firstData = days.indexWhere((d) => d.watched > 0 || d.skimmed > 0 || d.ms > 0);
   if (firstData < 0) firstData = days.length - 1;
   var streak = 0;
@@ -106,7 +106,7 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
     final saved = ref.watch(prefsProvider).getString(_key);
-    return ThemeMode.values.firstWhere((m) => m.name == saved, orElse: () => ThemeMode.system);
+    return ThemeMode.values.firstWhere((m) => m.name == saved, orElse: () => ThemeMode.light);
   }
 
   void set(ThemeMode mode) {

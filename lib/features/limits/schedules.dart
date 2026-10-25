@@ -167,6 +167,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
             for (final p in _presets.entries)
               ActionChip(
                 label: Text(p.key),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 onPressed: () => setState(() {
                   _name.text = p.key;
                   _start = p.value.$1;
@@ -178,7 +179,7 @@ class _ScheduleEditorState extends State<_ScheduleEditor> {
         const SizedBox(height: 8),
         TextField(
           controller: _name,
-          decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
+          decoration: _fieldDecoration('Name'),
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
@@ -270,6 +271,14 @@ class _DayButton extends StatelessWidget {
   }
 }
 
+/// Schedule sheet fields: rounder corners and less empty space above and below the text.
+InputDecoration _fieldDecoration(String label) => InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+    );
+
 class _TimeBox extends StatelessWidget {
   final String label;
   final String value;
@@ -282,7 +291,7 @@ class _TimeBox extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: InputDecorator(
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: _fieldDecoration(label),
         child: Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
       ),
     );

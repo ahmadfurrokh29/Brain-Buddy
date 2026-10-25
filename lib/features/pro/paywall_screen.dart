@@ -6,7 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/brain_buddy.dart';
 import '../../widgets/common.dart';
 
-/// Brain Buddy Pro. Built now, charging later: while [kBetaAllPro] is on, everything is free and no
+/// Brain Bean Pro. Built now, charging later: while [kBetaAllPro] is on, everything is free and no
 /// purchase can be made. Follows the fair-pay rules: full price in big text, close button always visible,
 /// no fake timers, cancel anytime.
 class PaywallScreen extends StatefulWidget {
@@ -51,7 +51,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         children: [
           const Center(child: BrainBuddy(mood: Mood.fresh, size: 120)),
           const SizedBox(height: 8),
-          Text('Brain Buddy Pro', style: t.headlineMedium, textAlign: TextAlign.center),
+          Text('Brain Bean Pro', style: t.headlineMedium, textAlign: TextAlign.center),
           const SizedBox(height: 4),
           Text('Stronger tools to scroll less.', style: t.bodyLarge?.copyWith(color: context.muted), textAlign: TextAlign.center),
           const SizedBox(height: 16),
@@ -62,7 +62,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 Icon(Icons.celebration_rounded, color: BB.mint),
                 SizedBox(width: 10),
                 Expanded(
-                  child: Text('All Pro features are free during the beta. Thank you for testing Brain Buddy!',
+                  child: Text('All Pro features are free during the beta. Thank you for testing Brain Bean!',
                       style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ]),

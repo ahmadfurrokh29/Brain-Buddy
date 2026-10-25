@@ -1,4 +1,4 @@
-package com.brainbuddy.app.widget
+package com.brainbean.app.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -7,13 +7,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import com.brainbuddy.app.MainActivity
-import com.brainbuddy.app.R
-import com.brainbuddy.app.core.Config
-import com.brainbuddy.app.core.Db
-import com.brainbuddy.app.core.Mood
+import com.brainbean.app.MainActivity
+import com.brainbean.app.R
+import com.brainbean.app.core.Config
+import com.brainbean.app.core.Db
+import com.brainbean.app.core.Mood
 
-/** Home-screen widget: today's reel count and Brain Buddy's mood. Reads the database directly. */
+/** Home-screen widget: today's reel count and Brain Bean's mood. Reads the database directly. */
 class BrainWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {

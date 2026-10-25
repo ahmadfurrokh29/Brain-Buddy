@@ -1,4 +1,4 @@
-// Renders the Brain Buddy mascot in every mood as transparent PNGs, for posters and store graphics.
+// Renders the Brain Bean mascot in every mood as transparent PNGs, for posters and store graphics.
 // Run: flutter test tool/render_poster_brains_test.dart   (files land in build/poster/)
 import 'dart:io';
 import 'dart:ui' as ui;

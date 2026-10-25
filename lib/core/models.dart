@@ -122,7 +122,7 @@ class AppConfig {
   });
 
   factory AppConfig.fromMap(Map<Object?, Object?> m) => AppConfig(
-        cloudBackup: m['cloudBackup'] as bool? ?? true,
+        cloudBackup: m['cloudBackup'] as bool? ?? false,
         earnEnabled: m['earnEnabled'] as bool? ?? false,
         stepsPerReward: _int(m['stepsPerReward']),
         focusMinutes: _int(m['focusMinutes']),
@@ -316,7 +316,7 @@ class TargetApp {
       );
 }
 
-/// Brain Buddy's mood. Same thresholds and brain colours as the native side (Mood.kt).
+/// Brain Bean's mood. Same thresholds and brain colours as the native side (Mood.kt).
 ///
 /// [color] is the mood's accent (glow, pill). [brain], [brainTop] and [brainOutline] colour the brain
 /// itself: healthy pink when fresh, fading through salmon, dull yellow and burnt orange to a drained

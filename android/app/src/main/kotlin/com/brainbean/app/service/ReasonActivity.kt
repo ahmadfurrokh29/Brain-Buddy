@@ -1,4 +1,4 @@
-package com.brainbuddy.app.service
+package com.brainbean.app.service
 
 import android.app.Activity
 import android.graphics.Color
@@ -17,11 +17,11 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.brainbuddy.app.core.Mood
-import com.brainbuddy.app.service.Overlays.Companion.GREY
-import com.brainbuddy.app.service.Overlays.Companion.INK
-import com.brainbuddy.app.service.Overlays.Companion.MINT
-import com.brainbuddy.app.service.Overlays.Companion.MINT_LIGHT
+import com.brainbean.app.core.Mood
+import com.brainbean.app.service.Overlays.Companion.GREY
+import com.brainbean.app.service.Overlays.Companion.INK
+import com.brainbean.app.service.Overlays.Companion.MINT
+import com.brainbean.app.service.Overlays.Companion.MINT_LIGHT
 
 /**
  * Firm lock: "Why do you want more reels?". A normal app screen rather than a pop-up over the reel app,

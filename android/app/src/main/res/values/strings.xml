@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Brain Buddy</string>
-    <string name="accessibility_label">Brain Buddy reel counter</string>
-    <string name="accessibility_description">Brain Buddy uses this to count the reels and shorts you scroll in the apps you choose (Instagram, YouTube, TikTok, Facebook, Snapchat, Reddit), and to show your counter and reel limit on top of them. It only looks at those apps. It never reads your messages, passwords or banking apps, and nothing leaves your phone.</string>
-    <string name="widget_description">Today\'s reel count and Brain Buddy\'s mood</string>
+    <string name="app_name">Brain Bean</string>
+    <string name="accessibility_label">Brain Bean reel counter</string>
+    <string name="accessibility_description">Brain Bean uses this to count the reels and shorts you scroll in the apps you choose (Instagram, YouTube, TikTok, Facebook, Snapchat, Reddit), and to show your counter and reel limit on top of them. It only looks at those apps and never reads your messages, passwords or banking apps. Your reel history stays on your phone; only if you join Squads or turn on Cloud backup are your reel counts shared, never which reels you watched.</string>
+    <string name="widget_description">Today\'s reel count and Brain Bean\'s mood</string>
 </resources>

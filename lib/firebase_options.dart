@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCTmp12E2GUxXE5zhTAmuU0t-ZUZw4AQ4Y',
-    appId: '1:278232562794:android:e9132143821b1905a01e13',
+    appId: '1:278232562794:android:74045669fef4d264a01e13',
     messagingSenderId: '278232562794',
     projectId: 'brain-buddy-ed84a',
     storageBucket: 'brain-buddy-ed84a.firebasestorage.app',

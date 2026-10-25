@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
 import '../../core/squads.dart';
@@ -36,6 +36,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
               title: const Text('Not signed in'),
               subtitle: const Text('Sign in from the Squads tab to compete with friends.'),
               trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.go('/squads'),
             )
           else ...[
             ListTile(
@@ -63,7 +64,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
             ] else ...[
               SwitchListTile(
                 secondary: const Icon(Icons.cloud_upload_rounded),
-                value: ref.watch(configProvider).value?.cloudBackup ?? true,
+                value: ref.watch(configProvider).value?.cloudBackup ?? false,
                 title: const Text('Cloud backup'),
                 subtitle: const Text('Daily history and settings saved to your Google account, about every 30 minutes. '
                     'Never individual reels.'),
@@ -125,7 +126,8 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       ref.invalidate(authUserProvider);
       if (mounted) showSnack(context, 'Your account is now a Google account ✅');
     } catch (e) {
-      if (mounted) showSnack(context, e.toString().split('\n').first);
+      debugPrint('BrainBuddy upgrade failed: $e');
+      if (mounted) showSnack(context, signInErrorMessage(e));
     }
   }
 
@@ -161,21 +163,47 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
           : 'You\'ll leave every squad and your nickname is deleted. This can\'t be undone. Your counts on this phone are not affected.',
       guest ? 'Sign out & delete' : 'Delete',
     );
-    if (!ok) return;
+    if (!ok || !mounted) return;
+    // A spinner while the server deletes everything, so it's clear something is happening.
+    // It can't be dismissed; it closes itself when the deletion finishes or fails.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Deleting your account…'),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+    var deleted = false;
     try {
       await ref.read(squadsRepoProvider).deleteAccount();
-      if (mounted) showSnack(context, 'Online account deleted');
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      showSnack(
-        context,
-        e.code == 'requires-recent-login'
-            ? 'For safety, sign out, sign in again, then delete.'
-            : 'Could not delete: ${e.message}',
-      );
+      deleted = true;
     } catch (e) {
-      if (mounted) showSnack(context, 'Could not delete: $e');
+      debugPrint('BrainBuddy delete account failed: $e');
+    } finally {
+      navigator.pop();
     }
+    if (deleted) ref.invalidate(authUserProvider);
+    if (!mounted) return;
+    showSnack(
+      context,
+      deleted
+          ? (guest ? 'Guest account deleted ✅' : 'Account deleted ✅')
+          : 'Could not delete the account. Check your internet and try again.',
+    );
   }
 
   Future<bool> _confirm(String title, String body, String action) async {

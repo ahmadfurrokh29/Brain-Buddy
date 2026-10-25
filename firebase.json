@@ -4,7 +4,7 @@
       "android": {
         "default": {
           "projectId": "brain-buddy-ed84a",
-          "appId": "1:278232562794:android:e9132143821b1905a01e13",
+          "appId": "1:278232562794:android:74045669fef4d264a01e13",
           "fileOutput": "android/app/google-services.json"
         }
       },
@@ -12,7 +12,7 @@
         "lib/firebase_options.dart": {
           "projectId": "brain-buddy-ed84a",
           "configurations": {
-            "android": "1:278232562794:android:e9132143821b1905a01e13"
+            "android": "1:278232562794:android:74045669fef4d264a01e13"
           }
         }
       }

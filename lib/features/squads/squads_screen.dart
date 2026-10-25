@@ -50,7 +50,8 @@ class _SignInState extends ConsumerState<_SignIn> {
     try {
       await action();
     } catch (e) {
-      if (mounted) showSnack(context, 'Sign-in didn\'t work: ${e.toString().split('\n').first}');
+      debugPrint('BrainBuddy sign-in failed: $e');
+      if (mounted) showSnack(context, signInErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -111,7 +112,7 @@ Future<void> offerCloudRestore(BuildContext context, WidgetRef ref) async {
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Restore your history?'),
-      content: const Text('Your Google account has a Brain Buddy backup: your daily reel history and settings. '
+      content: const Text('Your Google account has a Brain Bean backup: your daily reel history and settings. '
           'Bring it to this phone?'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
