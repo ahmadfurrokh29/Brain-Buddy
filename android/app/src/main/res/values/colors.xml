@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#E3F8F3</color>
+    <!-- Brain Bean mint: the start-up screen matches the splash screen. -->
+    <color name="splash_mint">#2EC4A6</color>
 </resources>

@@ -1,4 +1,4 @@
-// Renders the Brain Buddy mascot to PNG files for the launcher icon.
+// Renders the Brain Bean mascot to PNG files for the launcher icon and the Android start-up screen.
 // Run: flutter test tool/render_icon_test.dart   (then: dart run flutter_launcher_icons)
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<void> _render(WidgetTester tester, Widget child, String path) async {
+Future<void> _render(WidgetTester tester, Widget child, String path, {double size = 256}) async {
   final key = GlobalKey();
   await tester.pumpWidget(Directionality(
     textDirection: TextDirection.ltr,
-    child: Center(child: RepaintBoundary(key: key, child: SizedBox.square(dimension: 256, child: child))),
+    child: Center(child: RepaintBoundary(key: key, child: SizedBox.square(dimension: size, child: child))),
   ));
   await tester.pump();
   await tester.runAsync(() async {
@@ -47,6 +47,19 @@ void main() {
       tester,
       const Padding(padding: EdgeInsets.all(58), child: BrainBuddy(mood: Mood.fresh, size: 140, glow: false)),
       'assets/icon/foreground.png',
+    );
+
+    // Android start-up screen: the splash screen's logo (brain in a white circle, 180 dp), drawn by Android
+    // before Flutter starts so the screen is never plain. 720 px = 180 dp at xxxhdpi; Android scales it down.
+    await _render(
+      tester,
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        child: const BrainBuddy(mood: Mood.fresh, size: 140, glow: false),
+      ),
+      'android/app/src/main/res/drawable-xxxhdpi/splash_logo.png',
+      size: 180,
     );
   });
 }

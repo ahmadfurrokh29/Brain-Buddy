@@ -1,13 +1,15 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/models.dart';
 import '../../core/providers.dart';
+import '../../core/startup.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/brain_buddy.dart';
 
+/// The splash: exactly the picture Android shows while Brain Bean starts, so both look like one screen.
+/// Opens the app 1.2 s after the user's tap, or as soon as start-up is done if that took longer.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -16,38 +18,36 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  static const _total = 1200;
+  static const _picture = AssetImage('assets/splash/splash.png');
+  bool _started = false;
+
   @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(milliseconds: 1300), () {
-      if (!mounted) return;
-      context.go(ref.read(onboardingDoneProvider) ? '/home' : '/welcome');
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    // Show the first frame only once the picture is decoded; otherwise it flashes plain mint.
+    precacheImage(_picture, context).whenComplete(WidgetsBinding.instance.allowFirstFrame);
+    _open();
+  }
+
+  Future<void> _open() async {
+    final since = await ref.read(bridgeProvider).sinceLaunch().catchError((_) => 0);
+    await Future.wait([
+      firebaseReady,
+      Future<void>.delayed(Duration(milliseconds: max(0, _total - since))),
+    ]);
+    if (!mounted) return;
+    context.go(ref.read(onboardingDoneProvider) ? '/home' : '/welcome');
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: BB.mint,
-      body: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-            child: const BrainBuddy(mood: Mood.fresh, size: 140, glow: false),
-          ).animate().scale(begin: const Offset(0.7, 0.7), curve: Curves.easeOutBack, duration: 500.ms),
-          const SizedBox(height: 24),
-          Text('Brain Buddy', style: t.displaySmall?.copyWith(color: Colors.white))
-              .animate()
-              .fadeIn(delay: 200.ms)
-              .slideY(begin: 0.3),
-          const SizedBox(height: 6),
-          Text('Count less, live more', style: t.titleMedium?.copyWith(color: Colors.white.withValues(alpha: 0.9)))
-              .animate()
-              .fadeIn(delay: 400.ms),
-        ]),
-      ),
+      // 320 x 400 dp, centred, like Android's start-up screen (tool/render_splash_test.dart).
+      body: Center(child: Image(image: _picture, width: 320, height: 400)),
     );
   }
 }
