@@ -10,12 +10,39 @@ import java.util.Locale
 
 /** User settings. Stored natively so the counting service can read them even when the app UI is closed. */
 class Config(context: Context) {
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences("bb_config", Context.MODE_PRIVATE)
+    private val app = context.applicationContext
+    private val prefs: SharedPreferences = app.getSharedPreferences("bb_config", Context.MODE_PRIVATE)
 
+    /** Apps to count. Until the user picks, only the supported apps that are installed on this phone. */
     var tracked: Set<String>
-        get() = prefs.getStringSet(KEY_TRACKED, null) ?: TargetApps.all.map { it.pkg }.toSet()
+        get() = prefs.getStringSet(KEY_TRACKED, null) ?: installedTargets
         set(v) = prefs.edit().putStringSet(KEY_TRACKED, v).apply()
+
+    // Worked out once: this is read on every screen change in the reel apps.
+    private val installedTargets by lazy { TargetApps.all.map { it.pkg }.filter(::isInstalled).toSet() }
+
+    /**
+     * Switches on supported apps installed since the last check (e.g. Reddit installed later). Apps that were
+     * already installed keep the user's choice, so an app they switched off stays off.
+     * Returns true if the list of tracked apps changed.
+     */
+    fun trackNewlyInstalledApps(): Boolean {
+        val installedNow = TargetApps.all.map { it.pkg }.filter(::isInstalled).toSet()
+        val seen = prefs.getStringSet(KEY_SEEN_INSTALLED, null)
+        prefs.edit().putStringSet(KEY_SEEN_INSTALLED, installedNow).apply()
+        if (seen == null) return false // first check: nothing to compare with yet
+        val fresh = installedNow - seen
+        if (fresh.isEmpty()) return false
+        tracked = (prefs.getStringSet(KEY_TRACKED, null) ?: seen) + fresh
+        return true
+    }
+
+    private fun isInstalled(pkg: String) = try {
+        app.packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (_: Exception) {
+        false
+    }
 
     val budget get() = prefs.getInt("budget", 30)
     val dwellSec get() = prefs.getInt("dwellSec", 1)
@@ -360,6 +387,8 @@ class Config(context: Context) {
 
     companion object {
         private const val KEY_TRACKED = "tracked"
+        /** Supported apps that were installed at the last check, to spot newly installed ones. */
+        private const val KEY_SEEN_INSTALLED = "seenInstalled"
         /** Reels earned per 1,000 steps (or per [stepsPerReward]) and per finished focus session. */
         const val REWARD_REELS = 10
 

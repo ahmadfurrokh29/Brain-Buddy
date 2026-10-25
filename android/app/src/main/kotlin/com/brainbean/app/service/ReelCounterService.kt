@@ -175,6 +175,26 @@ class ReelCounterService : AccessibilityService() {
             if (Build.VERSION.SDK_INT >= 33) registerReceiver(systemEvents, filter, Context.RECEIVER_EXPORTED)
             else registerReceiver(systemEvents, filter)
         } catch (_: Exception) {}
+        // Installed while the counter wasn't running: catch up now.
+        if (config.trackNewlyInstalledApps()) CountBus.emit()
+        val installs = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
+        try {
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(appInstalled, installs, Context.RECEIVER_EXPORTED)
+            else registerReceiver(appInstalled, installs)
+        } catch (_: Exception) {}
+    }
+
+    /** A supported app was just installed (not updated): start tracking it straight away. */
+    private val appInstalled = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = safe("appInstalled") {
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return@safe
+            val pkg = intent.data?.schemeSpecificPart ?: return@safe
+            if (TargetApps.find(pkg) == null) return@safe
+            if (config.trackNewlyInstalledApps()) {
+                log("newly installed $pkg: now tracked")
+                CountBus.emit()
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) = safe("event") { onEvent(event) }
@@ -226,6 +246,7 @@ class ReelCounterService : AccessibilityService() {
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         try { unregisterReceiver(systemEvents) } catch (_: Exception) {}
+        try { unregisterReceiver(appInstalled) } catch (_: Exception) {}
         stepListener?.let { getSystemService(SensorManager::class.java)?.unregisterListener(it) }
         stepListener = null
         if (::overlays.isInitialized) overlays.hideAll()
@@ -318,6 +339,10 @@ class ReelCounterService : AccessibilityService() {
             if (pendingScroll && now - emptySince < 300) log("waiting for texts, raw=${snap.texts.take(4)}")
             scheduleEvaluate(300)
             return
+        } else if (app.showsText || app.pkg in appsWithText) {
+            // An app that shows reel text showed none for a moment (TikTok between two videos). That isn't a
+            // reel: counting it here added reels nobody watched. Wait for the next reel's text instead.
+            log("no text for a while in ${app.name}: not counted")
         } else if (curKey == null || (pendingScroll && now - lastFallbackPage > 800)) {
             // The app shows no readable text: fall back to one reel per swipe.
             lastFallbackPage = now
@@ -357,8 +382,27 @@ class ReelCounterService : AccessibilityService() {
     private var seenSource: String? = null
     private var seenPkg: String? = null
 
+    /**
+     * Reels seen today (newest last), for apps that don't report feed positions (TikTok, YouTube): a reel
+     * whose caption and most texts match one of these keeps that reel's key, so a label that comes and goes
+     * can't make it count again.
+     */
+    private val recentReels = ArrayDeque<Pair<String, List<String>>>()
+
     private fun keyFor(texts: List<String>): String {
-        val key = ReelDetector.key(texts)
+        val key = byPosition(texts, ReelDetector.key(texts))
+        if (key in counted) return key
+        val match = recentReels.lastOrNull { it.first != key && ReelDetector.sameReel(it.second, texts) }
+        if (match != null) {
+            log("same reel as ${match.first} (texts mostly match), key $key -> keeping it")
+            return match.first
+        }
+        recentReels.addLast(key to texts)
+        if (recentReels.size > RECENT_REELS) recentReels.removeFirst()
+        return key
+    }
+
+    private fun byPosition(texts: List<String>, key: String): String {
         // The position is only up to date right after a swipe (on opening the feed it can lag one reel behind).
         if (pagerIndex < 0 || !pendingScroll) return key
         if (pagerSource != seenSource) {
@@ -856,6 +900,7 @@ class ReelCounterService : AccessibilityService() {
             SquadSync.sync(this, force = true)
             day = today
             counted.clear()
+            recentReels.clear()
             counted.addAll(db.countedKeys(day))
         }
     }
@@ -873,6 +918,8 @@ class ReelCounterService : AccessibilityService() {
         private const val INTENT_COOLDOWN_MS = 10 * 60 * 1000L
         private const val FIRM_WAIT_SEC = 60
         private const val LEAVE_GRACE_MS = 2500L
+        /** How many of today's reels are remembered for the "same reel, different key" check. */
+        private const val RECENT_REELS = 300
         private const val EMERGENCY_REELS = 10
         /** Time after the last scroll event before the screen is read (a swipe animation is ~300 ms). */
         private const val SETTLE_MS = 400L

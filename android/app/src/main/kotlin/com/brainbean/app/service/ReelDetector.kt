@@ -33,7 +33,7 @@ object ReelDetector {
         "more actions", "new content available", "youtube premium", "privacy setting public",
         "reels tab details", "tap to show video controls", "video, overlays visible", "video buttons are active",
         "track position", "upvote", "downvote", "unmute", "add friends", "story sent", "spotlight",
-        "seekbar", "view likes",
+        "seekbar", "view likes", "full screen", "full-screen", "rotate camera",
     )
 
     /** Bottom-tab labels such as "Home, tab 1 of 6". */
@@ -45,6 +45,8 @@ object ReelDetector {
         "see more videos using this sound", "go to channel", "double tap", "tap to", "swipe",
         "subscriptions", "navigate to your reels profile", "enter full-screen", "are you interested in this",
         "opera_content_index", "like button",
+        // TikTok: the bookmark button and a search suggestion that changes between visits.
+        "add or remove this video", "search ·",
     )
 
     private val AD_LABELS = setOf("sponsored", "ad", "promoted", "sponsored ·", "ad ·")
@@ -90,7 +92,7 @@ object ReelDetector {
         return Snapshot(texts.sortedByDescending { it.length }, isAd)
     }
 
-    private val COUNT_WORDS = Regex("""\d[\d.,]*\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?|votes?|reactions?)\b""")
+    private val COUNT_WORDS = Regex("""\d[\d.,]*\+?\s*(k|m|b|thousand|million|billion|views?|likes?|comments?|replies|others?|shares?|votes?|reactions?|posts?|followers?|videos?)\b""")
     private val TIMER = Regex("""\d+:\d{2}|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\b|\b\d+\s*[smhdw]\b""")
     /**
      * Spelled-out counters: Instagram's "Reshare number is 31066", "Save number is 9230", "Reposted 1788 times",
@@ -112,12 +114,38 @@ object ReelDetector {
 
     /**
      * Stable id for a reel, used to remember it for the rest of the day. Built from the reel's longest texts,
-     * leaving out the music line ("Artist · Song"): it scrolls across the screen and is only readable on
-     * some visits, so including it made the same reel look new when scrolling back to it.
+     * leaving out the music line (Instagram "Artist · Song", TikTok "Sound: …" / "Contains: …"): it scrolls
+     * across the screen and is only readable on some visits, so including it made the same reel look new
+     * when scrolling back to it.
      */
     fun key(texts: Collection<String>): String {
-        val stable = texts.filterNot { it.contains(" · ") }.ifEmpty { texts }
+        val stable = texts.filterNot { isMusicLine(it) }.ifEmpty { texts }
         return stable.sortedByDescending { it.length }.take(4).sorted().joinToString("|").hashCode().toString(16)
+    }
+
+    private fun isMusicLine(s: String): Boolean {
+        val lower = s.lowercase()
+        return s.contains(" · ") || lower.startsWith("sound:") || lower.startsWith("contains:") ||
+            lower.startsWith("original sound")
+    }
+
+    /** The reel's main text: its longest text that isn't the music line (usually the caption). */
+    fun mainText(texts: Collection<String>): String? =
+        texts.filterNot { isMusicLine(it) }.maxByOrNull { it.length }
+
+    /**
+     * Whether two text lists are the same reel seen twice: the same main text (caption), and most of the
+     * rest shared, measured against the longer list. A few labels that come and go still match; two
+     * different videos from the same creator (same name, profile and follow button) differ in the caption.
+     */
+    fun sameReel(a: Collection<String>, b: Collection<String>): Boolean {
+        if (a.isEmpty() || b.isEmpty() || mainText(a) != mainText(b)) return false
+        val setA = a.toHashSet()
+        val setB = b.toHashSet()
+        // Seen once before it finished loading (only the caption, say): all of it is in the full version.
+        if (setA.size < setB.size && setB.containsAll(setA)) return true
+        if (setB.size < setA.size && setA.containsAll(setB)) return true
+        return setA.count { it in setB }.toDouble() / maxOf(setA.size, setB.size) >= 0.6
     }
 
     /** How much two reels' texts overlap, from 0 (nothing shared) to 1 (identical). */
