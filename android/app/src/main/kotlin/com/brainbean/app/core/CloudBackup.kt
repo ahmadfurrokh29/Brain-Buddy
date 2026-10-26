@@ -14,6 +14,8 @@ import com.google.firebase.firestore.SetOptions
  */
 object CloudBackup {
     private const val MIN_GAP_MS = 30 * 60_000L
+    /** A phone with this many days of its own history isn't fresh: its settings are the user's real ones. */
+    private const val ESTABLISHED_DAYS = 3
     private var lastRun = 0L
 
     fun backup(context: Context, force: Boolean = false) {
@@ -31,6 +33,32 @@ object CloudBackup {
         val from = if (config.lastBackupUid == user.uid) config.lastBackupDay else ""
         val days = db.daysWithData().filter { from.isEmpty() || it >= from } + today
         val userDoc = FirebaseFirestore.getInstance().collection("users").document(user.uid)
+        val settingsDoc = userDoc.collection("backup").document("settings")
+        // Settings go up only once this phone's settings are the real ones: restored from the cloud, the
+        // account has none saved yet, or this phone has its own history (it isn't a fresh phone).
+        when {
+            config.settingsSettledUid == user.uid || db.localDayCount() >= ESTABLISHED_DAYS -> {
+                config.settingsSettledUid = user.uid
+                upload(config, db, user.uid, userDoc, days, today, withSettings = true)
+            }
+            else -> settingsDoc.get()
+                .addOnSuccessListener { snap ->
+                    if (!snap.exists()) config.settingsSettledUid = user.uid
+                    upload(config, db, user.uid, userDoc, days, today, withSettings = !snap.exists())
+                }
+                .addOnFailureListener { Log.w("BrainBuddy", "Cloud backup: could not check settings: ${it.message}") }
+        }
+    }
+
+    private fun upload(
+        config: Config,
+        db: Db,
+        uid: String,
+        userDoc: com.google.firebase.firestore.DocumentReference,
+        days: List<String>,
+        today: String,
+        withSettings: Boolean,
+    ) {
         val batch = FirebaseFirestore.getInstance().batch()
         var writes = 0
         for (day in days.distinct()) {
@@ -39,12 +67,15 @@ object CloudBackup {
             batch.set(userDoc.collection("days").document(day), summary + ("updatedAt" to FieldValue.serverTimestamp()))
             if (++writes >= 400) break // stay under Firestore's 500-writes-per-batch limit; the rest goes next time
         }
-        batch.set(userDoc.collection("backup").document("settings"), mapOf("config" to config.toMap(), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+        if (withSettings) {
+            batch.set(userDoc.collection("backup").document("settings"), mapOf("config" to config.toMap(), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+        }
+        Log.i("BrainBuddy", "Cloud backup: $writes days, settings ${if (withSettings) "included" else "kept as they are in the cloud"}")
         batch.commit()
             .addOnSuccessListener {
                 if (writes < 400) {
                     config.lastBackupDay = today
-                    config.lastBackupUid = user.uid
+                    config.lastBackupUid = uid
                 }
             }
             .addOnFailureListener { Log.w("BrainBuddy", "Cloud backup failed: ${it.message}") }

@@ -237,6 +237,14 @@ class Config(context: Context) {
         get() = prefs.getString("lastBackupUid", "") ?: ""
         set(v) = prefs.edit().putString("lastBackupUid", v).apply()
 
+    /**
+     * The account whose cloud settings this phone may overwrite. Until then only reel history is backed up,
+     * so a fresh phone's default settings can't replace the user's real ones before they restore them.
+     */
+    var settingsSettledUid: String
+        get() = prefs.getString("settingsSettledUid", "") ?: ""
+        set(v) = prefs.edit().putString("settingsSettledUid", v).apply()
+
     /** Squads the signed-in user belongs to; the counter syncs counts to each. */
     val squadIds: List<String> get() = prefs.getStringSet("squadIds", emptySet())!!.toList()
 

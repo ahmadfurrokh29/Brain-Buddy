@@ -20,6 +20,8 @@ class NativeBridge {
 
   /// Uploads day summaries and settings to the signed-in Google account now.
   Future<void> backupNow() => _method.invokeMethod('backupNow');
+  /// After restoring settings from the cloud: this phone may now update the cloud copy of them.
+  Future<void> settingsRestored() => _method.invokeMethod('settingsRestored');
 
   /// Saves day summaries restored from the cloud. Returns how many days.
   Future<int> importSummaries(String json) async => (await _method.invokeMethod<int>('importSummaries', {'json': json})) ?? 0;

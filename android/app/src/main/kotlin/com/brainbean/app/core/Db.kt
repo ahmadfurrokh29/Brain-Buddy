@@ -76,10 +76,13 @@ class Db private constructor(context: Context) :
         })
     }
 
-    fun watchedCount(day: String): Int =
-        readableDatabase.rawQuery("SELECT COUNT(*) FROM events WHERE day = ? AND kind = 'watched'", arrayOf(day)).use {
+    /** Reels watched on [day]: on this phone, plus any restored from cloud backup for that day. */
+    fun watchedCount(day: String): Int {
+        val local = readableDatabase.rawQuery("SELECT COUNT(*) FROM events WHERE day = ? AND kind = 'watched'", arrayOf(day)).use {
             if (it.moveToFirst()) it.getInt(0) else 0
         }
+        return local + (importedSummary(day)?.get("watched") as? Int ?: 0)
+    }
 
     /** Watched reels over several days (e.g. this week, for Squads). */
     fun watchedCount(days: List<String>): Int {
@@ -88,7 +91,7 @@ class Db private constructor(context: Context) :
         val local = readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM events WHERE kind = 'watched' AND day IN ($marks)", days.toTypedArray(),
         ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
-        return local + daysWithoutEvents(days).sumOf { importedSummary(it)?.get("watched") as? Int ?: 0 }
+        return local + days.sumOf { importedSummary(it)?.get("watched") as? Int ?: 0 }
     }
 
     /** Reels watched today in one app (both TikTok package names count as one app). */
@@ -148,7 +151,23 @@ class Db private constructor(context: Context) :
         r.rawQuery("SELECT reason, COUNT(*) FROM intents WHERE day = ? GROUP BY reason", arrayOf(day)).use {
             while (it.moveToNext()) intents[it.getString(0)] = it.getInt(1)
         }
-        if (watched == 0 && skimmed == 0 && ads == 0 && ms == 0L) importedSummary(day)?.let { return it }
+        // Restored from cloud backup for this day (another phone, or before a reinstall): added on top of what
+        // this phone counted since. Restores only fill days this phone had no data for, so nothing counts twice.
+        importedSummary(day)?.let { imp ->
+            watched += imp["watched"] as? Int ?: 0
+            skimmed += imp["skimmed"] as? Int ?: 0
+            ads += imp["ads"] as? Int ?: 0
+            ms += (imp["ms"] as? Number)?.toLong() ?: 0L
+            (imp["hours"] as? List<*>)?.forEachIndexed { h, n -> if (h < 24) hours[h] += (n as? Number)?.toInt() ?: 0 }
+            (imp["apps"] as? List<*>)?.forEach { a ->
+                val m = a as? Map<*, *> ?: return@forEach
+                val pkg = m["pkg"] as? String ?: return@forEach
+                val app = app(pkg)
+                app["watched"] = (app["watched"] as Int) + ((m["watched"] as? Int) ?: 0)
+                app["skimmed"] = (app["skimmed"] as Int) + ((m["skimmed"] as? Int) ?: 0)
+                app["ms"] = (app["ms"] as Long) + ((m["ms"] as? Number)?.toLong() ?: 0L)
+            }
+        }
         return mapOf(
             "day" to day, "watched" to watched, "skimmed" to skimmed, "ads" to ads, "ms" to ms,
             "unlocks" to unlocks, "apps" to apps.values.toList(), "hours" to hours.toList(), "intents" to intents,
@@ -156,6 +175,12 @@ class Db private constructor(context: Context) :
     }
 
     // ---------------------------------------------------------------- cloud backup
+
+    /** Days with reels counted on this phone itself (restored days not included). */
+    fun localDayCount(): Int =
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM (SELECT DISTINCT day FROM events UNION SELECT DISTINCT day FROM time_spent)", null).use {
+            if (it.moveToFirst()) it.getInt(0) else 0
+        }
 
     /** Every day that has anything recorded, here or restored. */
     fun daysWithData(): List<String> {
@@ -166,16 +191,6 @@ class Db private constructor(context: Context) :
         return out.toList()
     }
 
-    private fun daysWithoutEvents(days: List<String>): List<String> {
-        if (days.isEmpty()) return emptyList()
-        val marks = days.joinToString(",") { "?" }
-        val withEvents = HashSet<String>()
-        readableDatabase.rawQuery("SELECT DISTINCT day FROM events WHERE day IN ($marks)", days.toTypedArray()).use {
-            while (it.moveToNext()) withEvents.add(it.getString(0))
-        }
-        return days.filter { it !in withEvents }
-    }
-
     fun importedSummary(day: String): Map<String, Any>? =
         readableDatabase.rawQuery("SELECT json FROM imported_days WHERE day = ?", arrayOf(day)).use {
             if (it.moveToFirst()) jsonToMap(JSONObject(it.getString(0))) else null
@@ -184,18 +199,28 @@ class Db private constructor(context: Context) :
     /** Saves day summaries from cloud backup (a JSON array of daySummary maps). Returns how many. */
     fun importSummaries(json: String): Int {
         val list = JSONArray(json)
+        // Days this phone already counted keep this phone's numbers: the backup may be this phone's own
+        // (restoring after it already uploaded), so adding it would count those reels twice.
+        val local = HashSet<String>()
+        readableDatabase.rawQuery("SELECT DISTINCT day FROM events UNION SELECT DISTINCT day FROM time_spent", null).use {
+            while (it.moveToNext()) local.add(it.getString(0))
+        }
+        var count = 0
         val w = writableDatabase
         w.beginTransaction()
         try {
             for (i in 0 until list.length()) {
                 val o = list.getJSONObject(i)
-                w.execSQL("INSERT OR REPLACE INTO imported_days(day, json) VALUES(?, ?)", arrayOf<Any>(o.getString("day"), o.toString()))
+                val day = o.getString("day")
+                if (day in local) continue
+                w.execSQL("INSERT OR REPLACE INTO imported_days(day, json) VALUES(?, ?)", arrayOf<Any>(day, o.toString()))
+                count++
             }
             w.setTransactionSuccessful()
         } finally {
             w.endTransaction()
         }
-        return list.length()
+        return count
     }
 
     private fun jsonToMap(o: JSONObject): Map<String, Any> {
@@ -233,7 +258,7 @@ class Db private constructor(context: Context) :
                 firstReel.putIfAbsent(it.getString(0), hour * 60 + cal.get(Calendar.MINUTE))
             }
         }
-        for (d in daysWithoutEvents(days)) {
+        for (d in days) { // restored days add their hours on top, like daySummary
             val hours = importedSummary(d)?.get("hours") as? List<*> ?: continue
             cal.time = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(d)!!
             val weekday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7

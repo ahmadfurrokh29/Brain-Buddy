@@ -92,6 +92,11 @@ class NativeBridge(private val activity: Activity, messenger: BinaryMessenger) {
             mapOf("pkg" to (installed ?: app.pkg), "pkgs" to pkgs, "name" to app.name, "installed" to (installed != null))
         }
         "getAppIcons" -> appIcons()
+        "settingsRestored" -> {
+            // Settings now come from the cloud backup, so this phone may update them there from now on.
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { config.settingsSettledUid = it }
+            true
+        }
         "backupNow" -> {
             CloudBackup.backup(activity, force = true)
             true

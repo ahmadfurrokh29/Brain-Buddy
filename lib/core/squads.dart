@@ -312,6 +312,8 @@ class SquadsRepo {
           if (!skip.contains(e.key)) e.key as String: e.value,
       });
     }
+    // This phone now has the backed-up settings, so its later changes may update the cloud copy.
+    await bridge.settingsRestored();
     return count;
   }
 
