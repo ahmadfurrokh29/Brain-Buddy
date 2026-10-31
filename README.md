@@ -90,39 +90,9 @@ A friendly brain mascot sits on top of the reel apps, **eats each reel you watch
 
 Brain Bean is split into a **Flutter UI** and a **native Kotlin engine**. Counting and locks must keep working while the app's own screens are closed, so they live in an Android `AccessibilityService`; Flutter talks to it over platform channels.
 
-```mermaid
-flowchart LR
-    subgraph Phone["Android phone"]
-        direction TB
-        UI["Flutter UI<br/>(Riverpod · go_router · fl_chart)"]
-        Bridge["Platform channels<br/>MethodChannel / EventChannel"]
-        subgraph Native["Kotlin engine"]
-            Svc["ReelCounterService<br/>(AccessibilityService)"]
-            Det["ReelDetector<br/>reel fingerprints"]
-            Ovl["Overlays<br/>counter · locks"]
-            DB[("SQLite")]
-        end
-        UI <--> Bridge <--> Svc
-        Svc --> Det
-        Svc --> Ovl
-        Svc --> DB
-    end
-    Apps["Reel apps<br/>(Instagram, TikTok…)"] -- "accessibility events" --> Svc
-    subgraph Cloud["Cloud (free tiers)"]
-        Auth["Firebase Auth"]
-        FS[("Cloud Firestore")]
-        FCM["Firebase Cloud Messaging"]
-        W["Cloudflare Worker<br/>nudges · account deletion · daily clean-up"]
-    end
-    UI --> Auth
-    UI --> FS
-    Svc -- "squad scores · cloud backup" --> FS
-    UI -- "nudge / delete (ID token)" --> W
-    W --> FS
-    W --> FCM
-    W --> Auth
-    FCM -- "push" --> Phone
-```
+<p align="center">
+  <img src="docs/images/architecture.png" alt="Architecture: Flutter UI and a Kotlin engine on the phone, Firebase and a Cloudflare Worker in the cloud" width="100%">
+</p>
 
 | Layer | Responsibility | Key files |
 |---|---|---|
